@@ -1,0 +1,18 @@
+[package]
+name = "cst816s-device-driver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+device-driver = { version = "1.0.0", default-features = false, features = [
+  "dsl",
+] }
+defmt = { version = "0.3", optional = true }
+embedded-hal = "1"
+
+[features]
+defmt-03 = ["dep:defmt", "device-driver/defmt-03"]
+
+[dev-dependencies]
+embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async"] }
+futures-test = "0.3.31"
