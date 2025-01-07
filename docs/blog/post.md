@@ -1,8 +1,9 @@
 In this post, we take a look at developing a device driver in Rust using Dion Dokter’s [device driver crate][device-driver-crate]
 
-Dion has very kindly put together a [book][device-driver-book] outlining the use of this crate.
+Dion has very kindly put together a [book][device-driver-book] outlining the use of this crate. We will also reference
+the [documentation for the crate][device-driver-docs] when it come to understanding the data types that are exposed.
 
-The purpose of device-driver is to take the boring part out of writing a low-level interface to a device.o
+The promise of `device-driver` is to take the boring part out of writing a low-level interface to a device.
 
 ```
   This post might not be directly aimed at beginners
@@ -10,7 +11,7 @@ The purpose of device-driver is to take the boring part out of writing a low-lev
   such as generics.
 ```
 
-## Target device
+# Target device
 
 The device we're going to implement a driver for is the Hynitron CST816S touch device. This is used on the
 [Waveshare RP2040 Touch LCD 1.28 inch][ws-rp2040-t-lcd] and it will be the test device we're going to work with as well.
@@ -19,35 +20,289 @@ Digging deeper into this chip reveals that it's most likely going to be differen
 as it seems the supplier can load customer supplied configuration and maybe even modified firmwares to support a given
 requirement. So any registers and functionality is not guaranteed to work even if the chip and overall use seem similar.
 
-## Prior art
+# Prior art
 
 [Other][rust-driver-1] [libraries][rust-driver-2] in [rust][pinetime-rust-driver-blog] and
 [other][adafruit-circuit-python-driver] [languages][cpp-driver-1] do exist for this device and I might reference their
 implementations as I go through this implementation process to make sure that my implementation is at least as correct
 if not better.
 
-## The Journey
+# The Journey
 
-### Studying the device documentation
+## Studying the device documentation
 
-It's a bit light on information, but here's what we know.
+It's a bit light on information, but here's what we know from the [Waveshare Datasheet][ws-datasheet].
 
-[Waveshare Datasheet][ws-datasheet]
+The chip is described as "High performance self-capacitance touch chip".
 
-[Waveshare register information][ws-registers]
+The high performance part refers to the chip supporting ">100Hz" touch reporting frequency in "Dynamic Mode".
+It also has low power consumption for each of it's three modes: <1.6mA, <6.0uA, <1.0uA in Dynamic, Standby, and Sleep
+mode respectively.
 
-The device uses I²C for communications, as well as an interrupt pin for signalling that data is ready for collection.
+Note that in sleep-mode, the chip is effectively turned off and no touch events will be reported. In Standby mode, the
+chip will scan for inputs much less frequently than in Dynamic mode. The chip can be "woken up", that is go from Standby
+to Dynamic mode by specifying a touch gesture wake command.
+Sleep mode can either be entered by the chip automatically by configuring the auto-sleep register values or by sending
+an undocumented sleep-command (I'm still not sure if this command is real.) Exiting Sleep mode requires that the reset-
+procedure be followed.
 
-#### Registers and Commands
+Self-capacitance refers to the way the chip implements the touch sensing part by have wires with current passing over
+each-other, a finger near those wires affect the capacitance between the wires, which can be read by the chip. CST816S
+supports up to 14 sensing channels (or 13 according to section 4.2).
 
-Many registers
+For communication with the main processor, the chip implements I²C at rates from 10KHz-400KHz. Do note that the chip
+will only respond to read and write requests on the bus just after a reset and then subsequently only after it has
+received touch inputs. To help with this minor inconvenience the chip has an extra pin for communication:
+The Interrupt Request (IRQ) pin. The chip will pull this pin low for an amount of time as configured by the
+`IrqPulseWidth` register.
 
-Sleep Command - how does it work? No one knows really.
+Resetting the chip to wake it from sleep mode or in general to put it into dynamic mode requires pull the reset-pin low
+for a little bit, then setting it high again. The reset-circuit inside the chip has a pull-up resistor and filters to
+make sure there aren't any spurious resets due to issues with floating voltage on the wire.
+
+
+## Low-level driver
+
+Now on to implementing the low-level driver. Here we mostly manually convert the register information from the
+[Waveshare register documentation][ws-registers] into the DSL the `device-driver` crate needs to generate code.
+
+### Driver DSL implementation
+
+In this section we will go through a pretty thorough setup of the repository for our driver as well as going through
+the DSL code we will write to convert the registers.
+
+Firstly we will host the driver and example code in a cargo workspace to we create a new folder
+with the following structure:
+
+```bash
+mkdir driver-workspace
+cd driver-workspace
+```
+
+For `cargo` to understand that we're working in a repository with a workspace the top-level `Cargo.toml` will have to
+contain a specific `workspace` section. We can populate it with only `resolver = "2"` since we're using 2021 edition but
+workspace resolution defaults to version `1`.
+
+```toml
+[workspace]
+resolver = "2"
+```
+
+Then we create a library crate for the device driver and a binary create for the example.
+
+```bash
+cargo new --lib driver
+cargo new --bin example
+```
+
+This also automatically adds a new value to the top-level `Cargo.toml` for each of the members in the workspace
+
+```toml
+members = ["driver", "example"]
+```
+
+Navigate to the newly created library crate directory
+
+```bash
+cd driver
+```
+
+Install `device-driver` dependency as well as some other dependencies that are needed
+
+```bash
+cargo add device-driver
+cargo add embedded-hal
+```
+
+Clean out the contents of `src/lib.rs` so we can start fresh.
+
+To develop a driver the device-driver crate provides a macro that lets us specify everything using a DSL or a manifest
+file in a variety of languages (JSON, Yaml, TOML, DSL)
+
+I'm going to be using the macro for educational purposes as any errors encountered will surface through the use of
+rust-analyzer before we even compile the project.
+
+In `src/lib.rs`:
+```rust
+device_driver::create_device!(
+  device_name: Device,
+  dsl: {
+    // Global config
+    // Registers
+    // Commands
+    // Buffers
+  }
+);
+```
+
+The global config will have to contain the address types for register, buffer, or command access.
+
+```rust
+dsl: {
+  config {
+    type RegisterAddressType = u8;
+  }
+}
+```
+
+If we need to use buffers or commands we have to include the `BufferAddressType` and `CommandAddressType` respectively.
+
+### Filling out the DSL from the datasheet
+
+A fairly tedious and very manual task to copy the register definitions from the datasheet into the DSL for the macro.
+
+For most of the registers they convert straight into integer values so they can be transcribed simply.
+E.g. like this for the `ChipId` register.
+
+ - Access Type is `RO` meaning Read Only.
+ - Address `0xA7`
+ - Value size in bits is `8`
+ - The field set is a single entry with the name `value`, type uint, and the bits selected from the read is index 0 to 8
+
+```rust
+    register ChipId {
+      type Access = RO;
+      const ADDRESS = 0xA7;
+      const SIZE_BITS = 8;
+      value: uint = 0..8,
+    },
+```
+
+For fields that we can write values to, we can leave out the `type Access` to opt-in to the default value or we could
+specify `WO` for write-only access.
+
+Some of the registers are a little more complex. The first register overall is actually best represented as an `enum`.
+We see this because it will return an integer value that can be interpreted based off the table from the
+register definition.
+
+| Variant     | Value       |
+| ----------- | ----------- |
+| NoGesture   | 0x00        |
+| SlideUp     | 0x01        |
+| SlideDown   | 0x02        |
+| SlideLeft   | 0x03        |
+| SlideRight  | 0x04        |
+| SingleClick | 0x05        |
+| DoubleClick | 0x0B        |
+| LongPress   | 0x0C        |
+
+As we can see we aren't covering every single option in the range of values that could be given for an integer to be
+converted to this enum, so we need to use a special invocation of the conversion.
+
+`value: uing as try enum Gesture { ... } = 0..8` With this we tell `device-driver` that the 8 bits of the register value
+should be used to reconstruct the enum variant needed. However, since we don't cover all options fully, the conversion
+might fail so we use `as try enum` as opposed to `as enum`. `Gesture` is our chosen name for the enum type that gets
+generated. The resulting register definition then looks like this:
+
+```rust
+    register GestureId {
+      type Access = RO;
+      const ADDRESS = 0x01;
+      const SIZE_BITS = 8;
+      value: uint as try enum Gesture {
+        NoGesture = 0x00,
+        SlideUp = 0x01,
+        SlideDown = 0x02,
+        SlideLeft = 0x03,
+        SlideRight = 0x04,
+        SingleClick = 0x05,
+        DoubleClick = 0x0B,
+        LongPress = 0x0C,
+      } = 0..8,
+    },
+  ```
+
+Some fields are bit-fields, meaning the value needs to be translated into more than one flag type value. We do this
+by defining more than one field in the field set list in the register. For instance, the `MotionMask` register will need
+such a setup.
+
+```rust
+/// Control which motion actions are enabled
+register MotionMask {
+  const ADDRESS = 0xEC;
+  const SIZE_BITS = 3;
+
+  /// Enable Double Click Action
+  EnDClick: bool = 0,
+  /// Enable Continuous Up-Down Scrolling Action
+  EnConUD: bool = 1,
+  /// Enable Continuous Left-Right Scrolling Action
+  EnConLR: bool = 2,
+},
+```
+
+
+### Custom Conversion Types
+
+`device-driver` supports converting the data in a field set to a custom type. We implement this for fields
+that are `uint` by implementing either `From<u8>` or `TryFrom<u8>` for infallible or infallible conversions
+respectively.
+
+To explore this topic I've decided to implement conversion for the `IrqPulseWidth` register.
+
+The DSL for this looks like the following
+
+```rust
+  register IrqPulseWidth {
+    ...
+
+    value: uint as PulseWidth = 0..8
+  }
+```
+
+In this case we can safely implement the conversion as we know the value coming from the device should be from 1-200.
+
+```rust
+#[derive(Debug)]
+pub struct PulseWidth {
+    value: u8,
+}
+
+impl PulseWidth {
+    pub fn new(value: u8) -> Self {
+        debug_assert!(value > 0);
+        debug_assert!(value <= 200);
+        Self { value }
+    }
+}
+
+impl From<u8> for PulseWidth {
+    fn from(value: u8) -> Self {
+        dbg_assert!(value > 0);
+        dbg_assert!(value <= 200);
+        Self { value }
+    }
+}
+
+impl From<PulseWidth> for u8 {
+    fn from(value: PulseWidth) -> Self {
+        *value
+    }
+}
+```
+
+So while we're developing out our final application and running debug builds. Rust will help us out upholding the
+invariants of this particular register.
+
+/// TODO : Add Fluff?
+
+
+### Teaching the driver to speak I²C
+
+We've generated the code for our low-level driver, but it doesn't know how to speak with the outside world. We have to
+help it along, by defining a struct that implements a few traits that we can give to it.
+
+The way we do this is to implement the `{Buffer,Command,Register}Interface` and/or `Async{Buffer,Command,Register}Interface` traits supplied to us by `device-driver`.
+
+```rust
+impl<BUS: embedded_hal::i2c::I2c> RegisterInterface for DeviceInterface<BUS> {
+  type Error = DeviceError<BUS::Error>
+}
+```
+
+## High-level Driver
 
 ### Outlining the public interface
-
-Before I even consider implementing the low-level driver interface using the device-driver crate, we need to consider
-how we want to use this from our own code.
 
 In theory, we could take the output that gets generated and use it directly in our own projects, however, this can both
 be tedious and error-prone. Especially if some operations need to happen repeatedly and in a specific manner. Maybe some
@@ -84,131 +339,6 @@ pub enum Gesture {
 }
 ```
 
-### Building the driver
-
-Create a repository for the device driver
-
-```bash
-cargo new --lib cst816s-device-driver
-```
-
-Navigate to the newly created directory
-
-```bash
-cd cst816-device-driver
-```
-
-Install `device-driver` dependency
-
-```bash
-cargo add device-driver
-```
-
-Clean out the contents of `src/lib.rs` so we can start fresh.
-
-To develop a driver the device-driver crate provides a macro that lets us specify everything using a DSL or a manifest
-file in a variety of languages (JSON, Yaml, TOML, DSL)
-
-I'm going to be using the macro for educational purposes as any errors encountered will surface through the use of
-rust-analyzer before we even compile the project.
-
-In `src/lib.rs`:
-```rust
-device_driver::create_device!(
-  device_name: Device,
-  dsl: {
-    config {
-      type RegisterAddressType = u8;
-      type BufferAddressType = u8;
-    }
-    register GestureId {
-      type Access = RO;
-      const ADDRESS = 0x01;
-      const SIZE_BITS = 8;
-      value: uint as try enum Gesture {
-        NoGesture = 0x00,
-        SlideUp = 0x01,
-        SlideDown = 0x02,
-        SlideLeft = 0x03,
-        SlideRight = 0x04,
-        SingleClick = 0x05,
-        DoubleClick = 0x0B,
-        LongPress = 0x0C,
-      } = 0..8,
-    },
-    /// Number of fingers
-    /// Zero or One
-    register FingerNum {
-      type Access = RO;
-      const ADDRESS = 0x02;
-      const SIZE_BITS = 8;
-      value: uint = 0..1
-    },
-  }
-);
-```
-
-### Filling out the DSL from the datasheet
-
-A fairly tedious and manual task to copy the register definitions from the datasheet into the DSL for the macro.
-
-We did run into some quirks of the device that are worth mentioning. For the `GestureId` we would like to convert the
-returned unsigned integer value to a Rust Enum. This is possible with the field in the register defined in the
-following way.
-
-```rust
-device_driver::create_device!(
-  device_name: Cst816SDeviceDriver,
-  dsl: {
-    config {
-      type RegisterAddressType = u8;
-      type BufferAddressType = u8;
-    }
-    register GestureId {
-      type Access = RO;
-      const ADDRESS = 0x01;
-      const SIZE_BITS = 8;
-      value: uint as try enum Gesture {
-        NoGesture = 0x00,
-        SlideUp = 0x01,
-        SlideDown = 0x02,
-        SlideLeft = 0x03,
-        SlideRight = 0x04,
-        SingleClick = 0x05,
-        DoubleClick = 0x0B,
-        LongPress = 0x0C,
-      } = 0..8,
-    },
-  }
-}
-```
-
-Note that we are using `uint as try enum Gesture { ... } = 0..8` since each variant in the enum isn't covering the full
-range of values a single byte could hold.
-
-The first several registers are read-only registers and have their access permission specified with the
-`type Access = RO;` line in their definition. The default behaviour for a register is read-write permissions so for the
-ones that we can also write to, we don't need to specify this type.
-
-### Custom Conversion Types
-
-What if we could have types that we convert into that does validation for us.
-
-/// TODO : Figure out this section with IrqPulseWidth register definition
-
-### Teaching the driver to speech I²C
-
-We've generated the code for our low-level driver, but it doesn't know how to speak with the outside world. We have to
-help it along, by defining a struct that implements a few traits that we can give to it.
-
-The way we do this is to implement the `RegisterInterface` trait supplied to us by `device-driver`.
-
-```rust
-
-```
-
-### High-level Driver
-
 But how do you use this new driver? You might very appropriately ask. I'm glad you did, or I assume you did, or whatever.
 
 Let's create a binary project that we can use as an example for the use of the touch driver on actual hardware.
@@ -227,13 +357,14 @@ cargo new touch-example
 ```
 
 
-## The Destination
+# The Destination
 
 We made a device driver! Huzzah!
 
 Please navigate to the [driver and example source repository][driver-repo] to view the final implementation.
 
 [device-driver-crate]: tab:https://crates.io/crates/device-driver
+[device-driver-docs]: tab:https://docs.rs/device-driver/latest/device_driver/
 [device-driver-book]: tab:https://diondokter.github.io/device-driver/
 [ws-rp2040-t-lcd]: tab:https://www.waveshare.com/wiki/RP2040-Touch-LCD-1.28#Application_Demo
 [rust-driver-1]: tab:https://github.com/tstellanova/cst816s

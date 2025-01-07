@@ -7,7 +7,7 @@ use embedded_hal::{
 };
 
 mod device;
-use device::{Device, DeviceInterface};
+use device::{Device, DeviceInterface, PulseWidth, *};
 
 pub struct CST816S<I2C, TPINT, TPRST> {
     device: Device<DeviceInterface<I2C>>,
@@ -47,15 +47,27 @@ where
         }
     }
 
+    pub fn set_irq_pulse_width(&mut self, pulse_width: PulseWidth) {
+        self.device
+            .irq_pulse_width()
+            .write(|write_object| write_object.set_value(pulse_width))
+            .unwrap();
+    }
+
     pub fn event(&mut self) -> Option<TouchEvent> {
         let int_pin_value = self.interrupt_pin.is_low().unwrap();
         if int_pin_value {
+            /*
             let xh = self.device.xpos_h().read().unwrap().value();
-            let xl = self.device.xpos_l().read().unwrap().value();
-            let yh = self.device.ypos_h().read().unwrap().value();
-            let yl = self.device.ypos_l().read().unwrap().value();
-            let x: u16 = ((xh as u16) << 2) | xl as u16;
-            let y: u16 = ((yh as u16) << 2) | yl as u16;
+              let xl = self.device.xpos_l().read().unwrap().value();
+              let yh = self.device.ypos_h().read().unwrap().value();
+              let yl = self.device.ypos_l().read().unwrap().value();
+              let x: u16 = ((xh as u16) << 2) | xl as u16;
+              let y: u16 = ((yh as u16) << 2) | yl as u16;
+              */
+            let x = self.device.xpos().read().unwrap().value();
+            let y = self.device.ypos().read().unwrap().value();
+
             Some(TouchEvent {
                 point: (x, y),
                 gesture: device::Gesture::SingleClick,

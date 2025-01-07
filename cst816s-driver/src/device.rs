@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use embedded_hal::i2c::SevenBitAddress;
 
 device_driver::create_device!(
@@ -5,7 +7,6 @@ device_driver::create_device!(
   dsl: {
     config {
       type RegisterAddressType = u8;
-      type BufferAddressType = u8;
     }
     register GestureId {
       type Access = RO;
@@ -35,6 +36,7 @@ device_driver::create_device!(
       type Access = RO;
       const ADDRESS = 0x03;
       const SIZE_BITS = 8;
+      const ALLOW_ADDRESS_OVERLAP = true;
       value: uint = 0..4,
     },
     /// 8 low bits of the 12bit x-position
@@ -42,13 +44,29 @@ device_driver::create_device!(
       type Access = RO;
       const ADDRESS = 0x04;
       const SIZE_BITS = 8;
+      const ALLOW_ADDRESS_OVERLAP = true;
       value: uint = 0..8,
+    },
+    /// X-coordinate for the touch event position.
+    /// This is a "virtual" register in the sense that the documentation does
+    /// specify it, but we combine the XposH and XposL registers automatically
+    /// by reading 16 bits starting from the address of `XposH` then mapping
+    /// the field into `value` by taking bit 0 to 12.
+    register Xpos {
+      type Access = RO;
+      type ByteOrder = BE;
+      const ADDRESS = 0x03;
+      const ALLOW_ADDRESS_OVERLAP = true;
+      const SIZE_BITS = 16;
+
+      value: uint = 0..12,
     },
     /// 4 High bits of the 12bit y-position
     register YposH {
       type Access = RO;
       const ADDRESS = 0x05;
       const SIZE_BITS = 8;
+      const ALLOW_ADDRESS_OVERLAP = true;
       value: uint = 0..4,
     },
     /// 8 low bits of the 12bit y-position
@@ -56,7 +74,22 @@ device_driver::create_device!(
       type Access = RO;
       const ADDRESS = 0x06;
       const SIZE_BITS = 8;
+      const ALLOW_ADDRESS_OVERLAP = true;
       value: uint = 0..8,
+    },
+    /// Y-coordinate for the touch event position.
+    /// This is a "virtual" register in the sense that the documentation does
+    /// specify it, but we combine the YposH and YposL registers automatically
+    /// by reading 16 bits starting from the address of `YposH` then mapping
+    /// the field into `value` by taking bit 0 to 12.
+    register Ypos {
+      type Access = RO;
+      type ByteOrder = BE;
+      const ADDRESS = 0x05;
+      const ALLOW_ADDRESS_OVERLAP = true;
+      const SIZE_BITS = 16;
+
+      value: uint = 0..12,
     },
     /// 8 high bits of the 16bit BPC0 value
     register BPC0H {
@@ -136,7 +169,7 @@ device_driver::create_device!(
       const SIZE_BITS = 8;
       const RESET_VALUE = 10;
 
-      value: uint = 0..8,
+      value: uint as crate::PulseWidth = 0..8,
     },
     /// Normal quick-scanning period
     /// This value affects [`LpAutoWakeTime`] and [`AutoSleepTime`]
@@ -334,8 +367,8 @@ impl<I2C> DeviceInterface<I2C> {
     }
 }
 
-impl<I2C: embedded_hal::i2c::I2c> device_driver::RegisterInterface for DeviceInterface<I2C> {
-    type Error = DeviceError<I2C::Error>;
+impl<BUS: embedded_hal::i2c::I2c> device_driver::RegisterInterface for DeviceInterface<BUS> {
+    type Error = DeviceError<BUS::Error>;
 
     type AddressType = u8;
 
@@ -386,6 +419,47 @@ impl<I2c> core::ops::DerefMut for DeviceError<I2c> {
     }
 }
 
+#[derive(Debug)]
+pub struct PulseWidth {
+    value: u8,
+}
+
+impl PulseWidth {
+    pub fn new(value: u8) -> Self {
+        debug_assert!(value > 0);
+        debug_assert!(value <= 200);
+        Self { value }
+    }
+}
+
+impl From<u8> for PulseWidth {
+    fn from(value: u8) -> Self {
+        assert!(value > 0);
+        assert!(value <= 200);
+        Self { value }
+    }
+}
+
+impl From<PulseWidth> for u8 {
+    fn from(value: PulseWidth) -> Self {
+        *value
+    }
+}
+
+impl Deref for PulseWidth {
+    type Target = u8;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl DerefMut for PulseWidth {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -402,6 +476,29 @@ mod tests {
 
         println!("Version: {version:X}");
         assert_eq!(version, 0x23);
+
+        i2c_device.done();
+    }
+
+    #[test]
+    async fn read_xpos() {
+        let mut i2c_device = i2c::Mock::new(&[
+            i2c::Transaction::write_read(0x15, vec![0x03], vec![0x01]),
+            i2c::Transaction::write_read(0x15, vec![0x04], vec![0x02]),
+            i2c::Transaction::write_read(0x15, vec![0x03], vec![0x01, 0x02]),
+        ]);
+        let mut s2 = Device::new(DeviceInterface::new(&mut i2c_device, 0x15));
+
+        let xh = s2.xpos_h().read().unwrap().value();
+        let xl = s2.xpos_l().read().unwrap().value();
+        let x = s2.xpos().read().unwrap().value();
+
+        println!("xh: {xh:X}");
+        println!("xl: {xl:X}");
+        println!("x: {x:X}");
+        assert_eq!(xh, 0x01);
+        assert_eq!(xl, 0x02);
+        assert_eq!(x, 0x0102);
 
         i2c_device.done();
     }
