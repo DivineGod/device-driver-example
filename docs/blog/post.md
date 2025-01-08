@@ -450,6 +450,22 @@ Note that for `gesture` we need to unwrap the result of the `value()` call as we
 If we wanted to be extra safe, we could also handle this error case but in the interest of not getting to bogged down,
 I'll leave this as an exercise for later.
 
+Writing to the chip is also important since we might need to alter the default settings describing the way the device
+works. We're able to do this is in our public interface by calling `write`. Here we've implemented a method to change
+the Interrupt Request pin pulse width register:
+
+```rust
+pub fn set_irq_pulse_width(&mut self, pulse_width: PulseWidth) {
+    self.device
+        .irq_pulse_width()
+        .write(|write_object| write_object.set_value(pulse_width))
+        .unwrap();
+}
+```
+
+The `write` method on the register accepts a closure function, that is called with a write object where we can call
+`set_value` which is setting the field of the field set in the `irq_pulse_width` register.
+
 # The Destination
 
 We made a device driver! Huzzah! Now, there are several improvements that could be made. For instance, it's possible to

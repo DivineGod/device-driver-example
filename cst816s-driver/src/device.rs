@@ -357,6 +357,8 @@ device_driver::create_device! {
   }
 }
 
+/// The `DeviceInterface<I2C>` is a struct that we will use to implement the traits supplied by the
+/// [`device-driver` crate](https://crates.io/crates/device-driver).
 pub(crate) struct DeviceInterface<I2C> {
     device_address: SevenBitAddress,
     i2c: I2C,
