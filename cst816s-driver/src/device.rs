@@ -1,13 +1,14 @@
 use core::ops::{Deref, DerefMut};
 
-use embedded_hal::i2c::SevenBitAddress;
+use embedded_hal::i2c::{self, Operation, SevenBitAddress};
 
-device_driver::create_device!(
+device_driver::create_device! {
   device_name: Device,
   dsl: {
     config {
       type RegisterAddressType = u8;
     }
+    /// GestureID stores the type of gesture registered by the touch device
     register GestureId {
       type Access = RO;
       const ADDRESS = 0x01;
@@ -19,7 +20,10 @@ device_driver::create_device!(
         SlideLeft = 0x03,
         SlideRight = 0x04,
         SingleClick = 0x05,
+        /// Double Click registered. Registration can be controlled using the [`field_sets::MotionMask`] register.
         DoubleClick = 0x0B,
+        /// Long Press detected. The time to register a long press is controlled by setting
+        /// the [`field_sets::LongPressTime`] register.
         LongPress = 0x0C,
       } = 0..8,
     },
@@ -119,18 +123,21 @@ device_driver::create_device!(
       const SIZE_BITS = 8;
       value: uint = 0..8,
     },
+    /// ProjectId Register
     register ChipId {
       type Access = RO;
       const ADDRESS = 0xA7;
       const SIZE_BITS = 8;
       value: uint = 0..8,
     },
+    /// ProjectId Register
     register ProjId {
       type Access = RO;
       const ADDRESS = 0xA8;
       const SIZE_BITS = 8;
       value: uint = 0..8,
     },
+    /// Firmware Version Register
     register FwVersion {
       type Access = RO;
       const ADDRESS = 0xA9;
@@ -348,10 +355,7 @@ device_driver::create_device!(
       value: uint = 0..8,
     },
   }
-);
-
-// const BLOB_BUF_LEN: usize = (10 * 6) + 3; // (MAX_TOUCH_CHANNELS * RAW_TOUCH_EVENT_LEN) + GESTURE_HEADER_LEN;
-// const ONE_EVENT_LEN: usize = 6 + 3; // RAW_TOUCH_EVENT_LEN + GESTURE_HEADER_LEN
+}
 
 pub(crate) struct DeviceInterface<I2C> {
     device_address: SevenBitAddress,
@@ -367,7 +371,7 @@ impl<I2C> DeviceInterface<I2C> {
     }
 }
 
-impl<BUS: embedded_hal::i2c::I2c> device_driver::RegisterInterface for DeviceInterface<BUS> {
+impl<BUS: i2c::I2c> device_driver::RegisterInterface for DeviceInterface<BUS> {
     type Error = DeviceError<BUS::Error>;
 
     type AddressType = u8;
@@ -378,8 +382,10 @@ impl<BUS: embedded_hal::i2c::I2c> device_driver::RegisterInterface for DeviceInt
         _size_bits: u32,
         data: &[u8],
     ) -> Result<(), Self::Error> {
-        self.i2c.write(self.device_address, &[address])?;
-        self.i2c.write(self.device_address, data)?;
+        self.i2c.transaction(
+            self.device_address,
+            &mut [Operation::Write(&[address]), Operation::Write(data)],
+        )?;
         Ok(())
     }
 

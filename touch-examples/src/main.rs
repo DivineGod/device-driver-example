@@ -7,7 +7,7 @@
 #![no_main]
 
 use cortex_m::delay::Delay;
-use cst816s_device_driver::CST816S;
+use cst816s_device_driver::{device, CST816S};
 use embedded_graphics::mono_font::ascii::FONT_10X20;
 use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder};
@@ -189,17 +189,24 @@ fn main() -> ! {
     let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
     let mut last_touch = (0, 0);
+    let mut color = Rgb565::CSS_NAVAJO_WHITE;
 
     loop {
         let start_ticks = timer.get_counter_low();
 
         let mut data = String::<9>::new(); // 9 byte string buffer
-        let mut color;
 
         // read event `if let Some(evt) = driver.read_event().await {}` maybe?
         if let Some(touch_event) = touchpad.event() {
             color = match touch_event.gesture {
-                _ => Rgb565::CYAN,
+                device::Gesture::NoGesture => Rgb565::WHITE,
+                device::Gesture::SlideUp => Rgb565::RED,
+                device::Gesture::SlideDown => Rgb565::BLUE,
+                device::Gesture::SlideLeft => Rgb565::YELLOW,
+                device::Gesture::SlideRight => Rgb565::GREEN,
+                device::Gesture::SingleClick => Rgb565::MAGENTA,
+                device::Gesture::DoubleClick => Rgb565::CSS_TAN,
+                device::Gesture::LongPress => Rgb565::CSS_PINK,
             };
             last_touch = touch_event.point;
         }
@@ -215,7 +222,7 @@ fn main() -> ! {
             data.as_str(),
             display.bounding_box().center(),
             text_style,
-            Rgb565::CYAN,
+            color,
             Rgb565::BLACK,
         );
 

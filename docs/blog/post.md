@@ -195,22 +195,22 @@ might fail so we use `as try enum` as opposed to `as enum`. `Gesture` is our cho
 generated. The resulting register definition then looks like this:
 
 ```rust
-    register GestureId {
-      type Access = RO;
-      const ADDRESS = 0x01;
-      const SIZE_BITS = 8;
-      value: uint as try enum Gesture {
-        NoGesture = 0x00,
-        SlideUp = 0x01,
-        SlideDown = 0x02,
-        SlideLeft = 0x03,
-        SlideRight = 0x04,
-        SingleClick = 0x05,
-        DoubleClick = 0x0B,
-        LongPress = 0x0C,
-      } = 0..8,
-    },
-  ```
+register GestureId {
+  type Access = RO;
+  const ADDRESS = 0x01;
+  const SIZE_BITS = 8;
+  value: uint as try enum Gesture {
+    NoGesture = 0x00,
+    SlideUp = 0x01,
+    SlideDown = 0x02,
+    SlideLeft = 0x03,
+    SlideRight = 0x04,
+    SingleClick = 0x05,
+    DoubleClick = 0x0B,
+    LongPress = 0x0C,
+  } = 0..8,
+},
+```
 
 Some fields are bit-fields, meaning the value needs to be translated into more than one flag type value. We do this
 by defining more than one field in the field set list in the register. For instance, the `MotionMask` register will need
@@ -284,8 +284,6 @@ impl From<PulseWidth> for u8 {
 So while we're developing out our final application and running debug builds. Rust will help us out upholding the
 invariants of this particular register.
 
-/// TODO : Add Fluff?
-
 
 ### Teaching the driver to speak I²C
 
@@ -296,9 +294,44 @@ The way we do this is to implement the `{Buffer,Command,Register}Interface` and/
 
 ```rust
 impl<BUS: embedded_hal::i2c::I2c> RegisterInterface for DeviceInterface<BUS> {
-  type Error = DeviceError<BUS::Error>
+    type Error = DeviceError<BUS::Error>;
+
+    type AddressType = u8;
+
+    fn write_register(
+        &mut self,
+        address: Self::AddressType,
+        _size_bits: u32,
+        data: &[u8],
+    ) -> Result<(), Self::Error> {
+        self.i2c.transaction(
+            self.device_address,
+            &mut [Operation::Write(&[address]), Operation::Write(data)],
+        )?;
+        Ok(())
+    }
+
+    fn read_register(
+        &mut self,
+        address: Self::AddressType,
+        _size_bits: u32,
+        data: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        self.i2c.write_read(self.device_address, &[address], data)?;
+        Ok(())
+    }
 }
 ```
+
+Here we have implemented the two provided methods for this trait.
+
+For writing to a register we have to first write
+the register address to the device, then we write out the data buffer and return `Ok(())`. We do this in a
+transaction so the i2c physical protocol is upheld and the device can respond correctly.
+
+For reading from a register we can use the `embedded_hal` provided `write_read` method. It'll deal with sending
+the right data to the right address.
+
 
 ## High-level Driver
 
@@ -311,57 +344,120 @@ operations need specific delays or certain pins need to be read before a command
 So we will define a public interface for our crate, that will wrap the lower-level code generated
 for us by `device-driver`.
 
+in `src/lib.rs`:
 ```rust
-struct CST816S {
-  ...
-}
-
-impl CST816S {
-  pub fn init() -> Self {
-    todo!()
-  }
-
-  pub fn next_event(&self) -> Option<TouchEvent> {
-    todo!()
-  }
-}
-
-pub struct TouchEvent {
-  position: Point,
-  gesture: Gesture,
-  finger_number: u32,
-}
-
-pub type Point = (u32, u32);
-
-pub enum Gesture {
-  ...
+pub struct CST816S<I2C, TPINT, TPRST> {
+    device: Device<DeviceInterface<I2C>>,
+    interrupt_pin: TPINT,
+    reset_pin: TPRST,
 }
 ```
 
-But how do you use this new driver? You might very appropriately ask. I'm glad you did, or I assume you did, or whatever.
+We have here a struct that has three generic parameters. As we will need to support a variety of different embedded
+targets we need to be generic over the types that implement functionality. `I2C` for the communication protocol, `TPINT`
+for the pin for touch interrupt, `TPRST` for the pin for resetting the chip.
 
-Let's create a binary project that we can use as an example for the use of the touch driver on actual hardware.
-
-```bash
-cargo new touch-example
-```
+We then implement methods for the struct
 
 ```rust
-/// I2C setup
-        .into_function::<hal::gpio::FunctionI2c>() // Type return here is Pin<Gpio6, FunctionI2c, PullDown>
-        .into_pull_type::<PullUp>(); // `hal::I2C::i2c1` expects `PullUp` instead of `PullDown`
+impl<I2C, TPINT, TPRST> CST816S<I2C, TPINT, TPRST>
+where
+    I2C: embedded_hal::i2c::I2c,
+    TPINT: embedded_hal::digital::InputPin,
+    TPRST: embedded_hal::digital::OutputPin,
+{
+    pub fn new(i2c: I2C, address: SevenBitAddress, interrupt_pin: TPINT, reset_pin: TPRST) -> Self { ... }
 
-/// OR
-        .reconfigure() // simpler
+    pub fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), TPRST::Error> { ... }
+
+    pub fn event(&mut self) -> Option<TouchEvent> { ... }
+}
 ```
 
+In the beginning of the `impl` block we say that the generic types `I2C`, `TPINT`, and `TPRST` must be types that
+implement their respective `embedded_hal` traits.
+
+The `new` associated function, invoked to setup the device interface initially, is fairly straightforward.
+
+```rust
+pub fn new(i2c: I2C, address: embedded_hal::i2c::SevenBitAddress, interrupt_pin: TPINT, reset_pin: TPRST) -> Self {
+    Self {
+        device: Device::new(DeviceInterface::new(i2c, address)),
+        interrupt_pin,
+        reset_pin,
+    }
+}
+```
+
+We need to take ownership of an instance of the communication interface. We also need to store the address for the
+device, and the two pins. Then return an instance of the struct with a device created from the low-level driver
+instantiated with the `DeviceInterface` we created to speak the communications protocol.
+
+For the `reset` method, I referenced other implementation for the sequence of pin states and delays as this isn't
+actually documented anywhere. It does seem to work here, so we're keeping it. It might be possible to tweak the delays
+to waste less time in starting up the device.
+
+```rust
+pub fn reset(&mut self, delay: &mut impl embedded_hal::delay::DelayNs) -> Result<(), TPRST::Error> {
+    self.reset_pin.set_low()?;
+    delay.delay_ms(20);
+    self.reset_pin.set_high()?;
+    delay.delay_ms(50);
+    Ok(())
+}
+```
+
+Note that we need to take a mutable reference to a type that implements the embedded hal trait `DelayNs` to be able to
+do the delay. This function is blocking so nothing else will be running.
+
+Reading an `event` from the device requires us to make sure that the interrupt pin is low. This is because it's the best
+indicator that we're able to get a response on the I²C interface from the touch chip. We could also let the user setup
+an interrupt handler for the falling edge of the interrupt pin.
+
+```rust
+pub fn event(&mut self) -> Option<TouchEvent> {
+    let int_pin_value = self.interrupt_pin.is_low();
+    match int_pin_value {
+        Ok(true) => {
+            let x = self.device.xpos().read();
+            let y = self.device.ypos().read();
+            let gesture = self.device.gesture_id().read();
+            if x.is_err() || y.is_err() || gesture.is_err() {
+                return None;
+            }
+            let x = x.unwrap().value();
+            let y = y.unwrap().value();
+            let gesture = gesture.unwrap().value().unwrap();
+            let point: Point = (x, y);
+
+            Some(TouchEvent { point, gesture })
+        }
+        _ => None,
+    }
+}
+```
+
+We do several reads here to put together the data needed for a proper touch event to reported back to the user code.
+Some slightly advanced error handling is also going on, I've tried to keep it fairly simple. The first line in the
+method, reading the interrupt pin `is_low()` returns a `Result<bool, _>` style value. So we will match on this value
+to ensure we only proceed if it is `Ok(true)`. Then we read the x-position, y-position, and gesture id. All three of
+these reads also return Results, that can error if the protocol encounters a problem. We don't really care for the error
+in this example, so we just do an early return if any of them returns true for `is_err()`. We can then unwrap each of
+the returned results safely and extract the `value` field from the register field set.
+
+Note that for `gesture` we need to unwrap the result of the `value()` call as we defined the conversion with
+`as try enum`, which means it could fail if the value read from the chip isn't within the values required in the enum.
+If we wanted to be extra safe, we could also handle this error case but in the interest of not getting to bogged down,
+I'll leave this as an exercise for later.
 
 # The Destination
 
-We made a device driver! Huzzah!
+We made a device driver! Huzzah! Now, there are several improvements that could be made. For instance, it's possible to
+initialise the and then try to use it without knowing it's in the correct running state. With the
+[typestate pattern][typestate] the state of the device can be encoded ensuring we use the device as intended.
 
-Please navigate to the [driver and example source repository][driver-repo] to view the final implementation.
+Please navigate to the [driver and example source repository][driver-repo] to view the final implementation. I have also
+included an example repository that utilises the driver on the target hardware to report the touch events on the display.
 
 [device-driver-crate]: tab:https://crates.io/crates/device-driver
 [device-driver-docs]: tab:https://docs.rs/device-driver/latest/device_driver/
@@ -375,3 +471,4 @@ Please navigate to the [driver and example source repository][driver-repo] to vi
 [pinetime-rust-driver-blog]: tab:https://www.pcbway.com/blog/Activities/Building_a_Rust_Driver_for_PineTime_s_Touch_Controller.html
 [adafruit-circuit-python-driver]: tab:https://github.com/adafruit/Adafruit_CircuitPython_CST8XX/blob/main/adafruit_cst8xx.py
 [driver-repo]: tab:https://github.com/DivineGod/device-driver-example
+[typestate]: tab:https://cliffle.com/blog/rust-typestate/
