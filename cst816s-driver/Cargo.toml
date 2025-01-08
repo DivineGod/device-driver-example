@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-device-driver = { version = "1.0.0", default-features = false, features = [
-  "dsl",
+device-driver = { version = "1.0.2", default-features = false, features = [
+    "dsl",
 ] }
 defmt = { version = "0.3", optional = true }
 embedded-hal = "1"
