@@ -2,6 +2,14 @@
 name = "cst816s-device-driver"
 version = "0.1.0"
 edition = "2021"
+keywords = [
+    "embedded-hal",
+    "touch",
+    "device-driver",
+    "embedded",
+    "driver",
+    "cst816s",
+]
 
 [dependencies]
 device-driver = { version = "1.0.2", default-features = false, features = [
