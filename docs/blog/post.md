@@ -335,6 +335,10 @@ the right data to the right address.
 
 ## High-level Driver
 
+For code readability in the final repository, I've split up the low-level code from the higher level code. So after
+putting the above code into `src/lib.rs` I moved it into a new file called `src/driver.rs`. I'll elide over this in the
+rest of the post as refactoring is an endless endeavour which could be a post of its own.
+
 ### Outlining the public interface
 
 In theory, we could take the output that gets generated and use it directly in our own projects, however, this can both

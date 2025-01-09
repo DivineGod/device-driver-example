@@ -1,3 +1,3 @@
 [workspace]
-members = ["cst816s-driver", "touch-examples"]
+members = ["driver", "example"]
 resolver = "2"

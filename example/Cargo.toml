@@ -17,4 +17,4 @@ rp2040-hal = "0.11.0"
 gc9a01a_driver = "1.0.0"
 waveshare-rp2040-touch-lcd-1-28 = { path = "../../../rp-hal-boards/boards/waveshare-rp2040-touch-lcd-1-28/" }
 device-driver = { version = "1.0.0", default-features = false }
-cst816s-device-driver = { path = "../cst816s-driver" }
+cst816s-device-driver = { path = "../driver" }
