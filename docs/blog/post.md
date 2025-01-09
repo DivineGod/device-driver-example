@@ -160,12 +160,12 @@ E.g. like this for the `ChipId` register.
  - The field set is a single entry with the name `value`, type uint, and the bits selected from the read is index 0 to 8
 
 ```rust
-    register ChipId {
-      type Access = RO;
-      const ADDRESS = 0xA7;
-      const SIZE_BITS = 8;
-      value: uint = 0..8,
-    },
+register ChipId {
+  type Access = RO;
+  const ADDRESS = 0xA7;
+  const SIZE_BITS = 8;
+  value: uint = 0..8,
+},
 ```
 
 For fields that we can write values to, we can leave out the `type Access` to opt-in to the default value or we could
@@ -243,11 +243,11 @@ To explore this topic I've decided to implement conversion for the `IrqPulseWidt
 The DSL for this looks like the following
 
 ```rust
-  register IrqPulseWidth {
-    ...
+register IrqPulseWidth {
+  ...
 
-    value: uint as PulseWidth = 0..8
-  }
+  value: uint as PulseWidth = 0..8
+}
 ```
 
 In this case we can safely implement the conversion as we know the value coming from the device should be from 1-200.
@@ -255,29 +255,29 @@ In this case we can safely implement the conversion as we know the value coming 
 ```rust
 #[derive(Debug)]
 pub struct PulseWidth {
-    value: u8,
+  value: u8,
 }
 
 impl PulseWidth {
-    pub fn new(value: u8) -> Self {
-        debug_assert!(value > 0);
-        debug_assert!(value <= 200);
-        Self { value }
-    }
+  pub fn new(value: u8) -> Self {
+    debug_assert!(value > 0);
+    debug_assert!(value <= 200);
+    Self { value }
+  }
 }
 
 impl From<u8> for PulseWidth {
-    fn from(value: u8) -> Self {
-        dbg_assert!(value > 0);
-        dbg_assert!(value <= 200);
-        Self { value }
-    }
+  fn from(value: u8) -> Self {
+    dbg_assert!(value > 0);
+    dbg_assert!(value <= 200);
+    Self { value }
+  }
 }
 
 impl From<PulseWidth> for u8 {
-    fn from(value: PulseWidth) -> Self {
-        *value
-    }
+  fn from(value: PulseWidth) -> Self {
+    *value
+  }
 }
 ```
 
@@ -294,32 +294,32 @@ The way we do this is to implement the `{Buffer,Command,Register}Interface` and/
 
 ```rust
 impl<BUS: embedded_hal::i2c::I2c> RegisterInterface for DeviceInterface<BUS> {
-    type Error = DeviceError<BUS::Error>;
+  type Error = DeviceError<BUS::Error>;
 
-    type AddressType = u8;
+  type AddressType = u8;
 
-    fn write_register(
-        &mut self,
-        address: Self::AddressType,
-        _size_bits: u32,
-        data: &[u8],
-    ) -> Result<(), Self::Error> {
-        self.i2c.transaction(
-            self.device_address,
-            &mut [Operation::Write(&[address]), Operation::Write(data)],
-        )?;
-        Ok(())
-    }
+  fn write_register(
+    &mut self,
+    address: Self::AddressType,
+    _size_bits: u32,
+    data: &[u8],
+  ) -> Result<(), Self::Error> {
+    self.i2c.transaction(
+      self.device_address,
+      &mut [Operation::Write(&[address]), Operation::Write(data)],
+    )?;
+    Ok(())
+  }
 
-    fn read_register(
-        &mut self,
-        address: Self::AddressType,
-        _size_bits: u32,
-        data: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        self.i2c.write_read(self.device_address, &[address], data)?;
-        Ok(())
-    }
+  fn read_register(
+    &mut self,
+    address: Self::AddressType,
+    _size_bits: u32,
+    data: &mut [u8],
+  ) -> Result<(), Self::Error> {
+    self.i2c.write_read(self.device_address, &[address], data)?;
+    Ok(())
+  }
 }
 ```
 
@@ -347,9 +347,9 @@ for us by `device-driver`.
 in `src/lib.rs`:
 ```rust
 pub struct CST816S<I2C, TPINT, TPRST> {
-    device: Device<DeviceInterface<I2C>>,
-    interrupt_pin: TPINT,
-    reset_pin: TPRST,
+  device: Device<DeviceInterface<I2C>>,
+  interrupt_pin: TPINT,
+  reset_pin: TPRST,
 }
 ```
 
@@ -362,15 +362,15 @@ We then implement methods for the struct
 ```rust
 impl<I2C, TPINT, TPRST> CST816S<I2C, TPINT, TPRST>
 where
-    I2C: embedded_hal::i2c::I2c,
-    TPINT: embedded_hal::digital::InputPin,
-    TPRST: embedded_hal::digital::OutputPin,
+  I2C: embedded_hal::i2c::I2c,
+  TPINT: embedded_hal::digital::InputPin,
+  TPRST: embedded_hal::digital::OutputPin,
 {
-    pub fn new(i2c: I2C, address: SevenBitAddress, interrupt_pin: TPINT, reset_pin: TPRST) -> Self { ... }
+  pub fn new(i2c: I2C, address: SevenBitAddress, interrupt_pin: TPINT, reset_pin: TPRST) -> Self { ... }
 
-    pub fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), TPRST::Error> { ... }
+  pub fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), TPRST::Error> { ... }
 
-    pub fn event(&mut self) -> Option<TouchEvent> { ... }
+  pub fn event(&mut self) -> Option<TouchEvent> { ... }
 }
 ```
 
@@ -381,11 +381,11 @@ The `new` associated function, invoked to setup the device interface initially, 
 
 ```rust
 pub fn new(i2c: I2C, address: embedded_hal::i2c::SevenBitAddress, interrupt_pin: TPINT, reset_pin: TPRST) -> Self {
-    Self {
-        device: Device::new(DeviceInterface::new(i2c, address)),
-        interrupt_pin,
-        reset_pin,
-    }
+  Self {
+    device: Device::new(DeviceInterface::new(i2c, address)),
+    interrupt_pin,
+    reset_pin,
+  }
 }
 ```
 
@@ -399,11 +399,11 @@ to waste less time in starting up the device.
 
 ```rust
 pub fn reset(&mut self, delay: &mut impl embedded_hal::delay::DelayNs) -> Result<(), TPRST::Error> {
-    self.reset_pin.set_low()?;
-    delay.delay_ms(20);
-    self.reset_pin.set_high()?;
-    delay.delay_ms(50);
-    Ok(())
+  self.reset_pin.set_low()?;
+  delay.delay_ms(20);
+  self.reset_pin.set_high()?;
+  delay.delay_ms(50);
+  Ok(())
 }
 ```
 
@@ -416,24 +416,24 @@ an interrupt handler for the falling edge of the interrupt pin.
 
 ```rust
 pub fn event(&mut self) -> Option<TouchEvent> {
-    let int_pin_value = self.interrupt_pin.is_low();
-    match int_pin_value {
-        Ok(true) => {
-            let x = self.device.xpos().read();
-            let y = self.device.ypos().read();
-            let gesture = self.device.gesture_id().read();
-            if x.is_err() || y.is_err() || gesture.is_err() {
-                return None;
-            }
-            let x = x.unwrap().value();
-            let y = y.unwrap().value();
-            let gesture = gesture.unwrap().value().unwrap();
-            let point: Point = (x, y);
+  let int_pin_value = self.interrupt_pin.is_low();
+  match int_pin_value {
+    Ok(true) => {
+      let x = self.device.xpos().read();
+      let y = self.device.ypos().read();
+      let gesture = self.device.gesture_id().read();
+      if x.is_err() || y.is_err() || gesture.is_err() {
+        return None;
+      }
+      let x = x.unwrap().value();
+      let y = y.unwrap().value();
+      let gesture = gesture.unwrap().value().unwrap();
+      let point: Point = (x, y);
 
-            Some(TouchEvent { point, gesture })
-        }
-        _ => None,
+      Some(TouchEvent { point, gesture })
     }
+    _ => None,
+  }
 }
 ```
 
@@ -456,10 +456,10 @@ the Interrupt Request pin pulse width register:
 
 ```rust
 pub fn set_irq_pulse_width(&mut self, pulse_width: PulseWidth) {
-    self.device
-        .irq_pulse_width()
-        .write(|write_object| write_object.set_value(pulse_width))
-        .unwrap();
+  self.device
+    .irq_pulse_width()
+    .write(|write_object| write_object.set_value(pulse_width))
+    .unwrap();
 }
 ```
 
