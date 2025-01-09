@@ -480,6 +480,9 @@ initialise the and then try to use it without knowing it's in the correct runnin
 Please navigate to the [driver and example source repository][driver-repo] to view the final implementation. I have also
 included an example repository that utilises the driver on the target hardware to report the touch events on the display.
 
+Don't hesitate to [reach out with any feedback][mastodon] or check out my [resume website][mjolner] as I'm available for
+hire!
+
 [device-driver-crate]: tab:https://crates.io/crates/device-driver
 [device-driver-docs]: tab:https://docs.rs/device-driver/latest/device_driver/
 [device-driver-book]: tab:https://diondokter.github.io/device-driver/
@@ -493,3 +496,5 @@ included an example repository that utilises the driver on the target hardware t
 [adafruit-circuit-python-driver]: tab:https://github.com/adafruit/Adafruit_CircuitPython_CST8XX/blob/main/adafruit_cst8xx.py
 [driver-repo]: tab:https://github.com/DivineGod/device-driver-example
 [typestate]: tab:https://cliffle.com/blog/rust-typestate/
+[mastodon]: tab:https://hachyderm.io/@voided
+[mjolner]: tab:https://mjolner.tech/
