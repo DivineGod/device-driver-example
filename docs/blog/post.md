@@ -290,7 +290,8 @@ invariants of this particular register.
 We've generated the code for our low-level driver, but it doesn't know how to speak with the outside world. We have to
 help it along, by defining a struct that implements a few traits that we can give to it.
 
-The way we do this is to implement the `{Buffer,Command,Register}Interface` and/or `Async{Buffer,Command,Register}Interface` traits supplied to us by `device-driver`.
+The way we do this is to implement the `{Buffer,Command,Register}Interface` and/or
+`Async{Buffer,Command,Register}Interface` traits supplied to us by `device-driver`.
 
 ```rust
 impl<BUS: embedded_hal::i2c::I2c> RegisterInterface for DeviceInterface<BUS> {
