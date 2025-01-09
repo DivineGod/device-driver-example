@@ -1,3 +1,4 @@
+//! # Low-Level Device Driver implementation
 use core::ops::{Deref, DerefMut};
 
 use embedded_hal::i2c::{self, Operation, SevenBitAddress};
@@ -427,12 +428,15 @@ impl<I2c> core::ops::DerefMut for DeviceError<I2c> {
     }
 }
 
+/// This is a custom conversion type for `device-driver` to use with the IrqPulseWidth register.
 #[derive(Debug)]
 pub struct PulseWidth {
     value: u8,
 }
 
 impl PulseWidth {
+    /// Create a new `PulseWidth` instance. Asserts that the value is in the range 1-200,
+    /// as required by the chip documentation
     pub fn new(value: u8) -> Self {
         debug_assert!(value > 0);
         debug_assert!(value <= 200);
