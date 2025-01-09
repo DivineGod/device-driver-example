@@ -73,7 +73,7 @@ fn main() -> ! {
     // Initialize watchdog
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
 
-    // Initialize clocks and PLLs
+    // Initialize clocks and PLLs (Phase-locked loop)
     let clocks = init_clocks_and_plls(
         XOSC_CRYSTAL_FREQ,
         pac.XOSC,
@@ -86,7 +86,7 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    // Initialize SIO
+    // Initialize SIO (Single Cycle I/O)
     let sio = Sio::new(pac.SIO);
     let pins = Pins::new(
         pac.IO_BANK0,
@@ -113,7 +113,7 @@ fn main() -> ! {
         .lcd_bl
         .into_push_pull_output_in_state(hal::gpio::PinState::Low);
 
-    // Initialize SPI
+    // Initialize SPI from the LCD pins
     let spi = hal::Spi::<_, _, _, 8>::new(pac.SPI1, (lcd_mosi, lcd_clk));
     let spi = spi.init(
         &mut pac.RESETS,
@@ -122,39 +122,47 @@ fn main() -> ! {
         embedded_hal::spi::MODE_0,
     );
 
-    // Initialize the display
+    // Initialize the display using SPI
     let mut display = GC9A01A::new(spi, lcd_dc, lcd_cs, lcd_rst, false, LCD_WIDTH, LCD_HEIGHT);
-    //let mut delay = Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+
+    // We need to wrap the delay in a newtype to be able to implement embedded_hal::delay::DelayNs as this is required
+    // for the display and the touch driver
     let mut delay_wrapper = DelayWrapper::new(&mut delay);
 
-    // Use the wrapper when initializing the display
+    // Use the delay wrapper when initializing the display
     display.init(&mut delay_wrapper).unwrap();
 
-    display.set_orientation(&Orientation::Landscape).unwrap();
+    // Set the orientation so the USB port is down and text is left-to-right
+    display.set_orientation(&Orientation::Portrait).unwrap();
 
+    // Using a frame buffer for managing drawing to the display will make the updates look a lot smoother
     // Allocate the buffer in main and pass it to the FrameBuffer
     let mut background_buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut background_framebuffer =
         FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
-
     let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
     background_framebuffer.clear(Rgb565::BLACK);
 
     // Clear the screen before turning on the backlight
     display.clear_screen(Rgb565::BLACK.into_storage()).unwrap();
+    delay_wrapper.delay_ms(1); // Delay a little bit to avoid a screen flash
     lcd_bl.into_push_pull_output_in_state(hal::gpio::PinState::High);
-    delay_wrapper.delay_ms(1000);
 
-    /* Setup Touch Driver thingy */
+    // Setup Touch Driver
+    //
+    // Set up the pins needed for the driver
+    let sda_pin = pins.i2c1_sda.reconfigure();
+    let scl_pin = pins.i2c1_scl.reconfigure();
+    let touch_interrupt_pin = pins.tp_int.into_pull_up_input();
+    // Setup reset pin for touch driver
+    let touch_reset_pin = pins
+        .tp_rst
+        .into_push_pull_output_in_state(hal::gpio::PinState::High);
 
-    // Setup I2C bus for touch driver
-    let sda_pin = pins.i2c1_sda.reconfigure(); // Setup the sda pin to the correct function and pull-type (I2C, PullUp) as required by `hal::I2C::i2c1`
-    let scl_pin = pins.i2c1_scl.reconfigure(); // Setup the scl pin to the correct function and pull-type (I2C, PullUp) as required by `hal::I2C::i2c1`
-
-    // Create the I²C drive, using the two pre-configured pins. This will fail
-    // at compile time if the pins are in the wrong mode, or if this I²C
-    // peripheral isn't available on these pins!
+    // Create the I²C driver, using the two pre-configured pins.
+    // This will fail  at compile time if the pins are in the wrong mode, or if
+    // this I²C peripheral isn't available on these pins!
     let i2c = hal::I2C::i2c1(
         pac.I2C1,
         sda_pin,
@@ -164,14 +172,7 @@ fn main() -> ! {
         &clocks.system_clock,
     );
 
-    // Setup interrupt pin for touch driver
-    let touch_int = pins.tp_int.into_pull_up_input();
-    // Setup reset pin for touch driver
-    let touch_rst = pins
-        .tp_rst
-        .into_push_pull_output_in_state(hal::gpio::PinState::High);
-
-    let mut touchpad = CST816S::new(i2c, 0x15, touch_int, touch_rst);
+    let mut touchpad = CST816S::new(i2c, 0x15, touch_interrupt_pin, touch_reset_pin);
 
     // Setup Touch Driver
     touchpad.reset(&mut delay_wrapper).unwrap();
@@ -185,7 +186,7 @@ fn main() -> ! {
         .alignment(Alignment::Center)
         .build();
 
-    // Initialize the timer
+    // Initialize the timer for frame time counting
     let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
     let mut last_touch = (0, 0);
@@ -194,9 +195,7 @@ fn main() -> ! {
     loop {
         let start_ticks = timer.get_counter_low();
 
-        let mut data = String::<9>::new(); // 9 byte string buffer
-
-        // read event `if let Some(evt) = driver.read_event().await {}` maybe?
+        // Read a touch event from the touch driver and update last_touch if there is a valid event
         if let Some(touch_event) = touchpad.event() {
             color = match touch_event.gesture {
                 device::Gesture::NoGesture => Rgb565::WHITE,
@@ -213,10 +212,11 @@ fn main() -> ! {
 
         // `write` for `heapless::String` returns an error if the buffer is full,
         // but because the buffer here is 9 bytes large, the `(xxx:yyy)` will fit.
+        let mut data = String::<9>::new(); // 9 byte string buffer
         let (x, y) = last_touch;
         let _ = write!(data, "({x:03},{y:03})").unwrap();
 
-        // Draw centered text.
+        // Draw centered text
         let text_bounding_region = draw_text_with_background(
             &mut framebuffer,
             data.as_str(),
@@ -225,7 +225,6 @@ fn main() -> ! {
             color,
             Rgb565::BLACK,
         );
-
         display.store_region(text_bounding_region).unwrap();
 
         //Display the next set of regions.
@@ -234,6 +233,7 @@ fn main() -> ! {
         framebuffer.copy_regions(background_framebuffer.get_buffer(), display.get_regions());
         //clear out the regions from the display so its ready to start again.
         display.clear_regions();
+
         // Ensure each frame takes the exact same amount of time
         let end_ticks = timer.get_counter_low();
         let frame_ticks = end_ticks - start_ticks;
@@ -271,7 +271,7 @@ fn draw_text_with_background(
     text.draw(framebuffer).unwrap();
 
     // Return the bounding box
-    //Added 22 width on the Region to accom0date larger numbers
+    // Added 22 width on the Region to accom0date larger numbers
     Region {
         x: text_area.top_left.x as u16,
         y: text_area.top_left.y as u16,
