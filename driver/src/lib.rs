@@ -13,7 +13,7 @@ use embedded_hal::{
 };
 
 pub mod device;
-use device::{Device, DeviceInterface, PulseWidth};
+use device::{Device, DeviceError, DeviceInterface, PulseWidth};
 
 /// Public interface struct for our High-level driver
 pub struct CST816S<I2C, TPINT, TPRST> {
@@ -52,6 +52,31 @@ where
         Ok(())
     }
 
+    /// Set initial default config
+    pub fn init_config(&mut self) -> Result<(), DeviceError<I2C::Error>> {
+        self.device.irq_ctl().write(|irq_ctl| {
+            irq_ctl.set_en_test(false);
+            irq_ctl.set_en_touch(true);
+            irq_ctl.set_once_wlp(true);
+            irq_ctl.set_en_change(false);
+            irq_ctl.set_en_motion(false);
+        })?;
+        self.device.motion_mask().write(|mask| {
+            mask.set_en_d_click(true);
+            mask.set_en_con_lr(false);
+            mask.set_en_con_ud(false);
+        })?;
+        self.device.motion_sl_angle().write(|m| m.set_value(0))?;
+        self.device.lp_scan_th().write(|m| m.set_value(48))?;
+        self.device.lp_scan_win().write(|m| m.set_value(3))?;
+        self.device.lp_scan_freq().write(|m| m.set_value(7))?;
+        self.device.lp_scan_idac().write(|m| m.set_value(1))?;
+        self.device.auto_reset().write(|m| m.set_value(5))?;
+        self.device.dis_auto_sleep().write(|m| m.set_value(1))?;
+
+        Ok(())
+    }
+
     /// Read the ChipId register if the device is available for reads
     pub fn read_chip_id(&mut self) -> Option<u8> {
         let int_pin_value = self.interrupt_pin.is_low().unwrap();
@@ -78,24 +103,27 @@ where
     ///
     /// Will return a [`TouchEvent`] struct if the device has a valid touch ready.
     pub fn event(&mut self) -> Option<TouchEvent> {
-        let int_pin_value = self.interrupt_pin.is_low();
-        match int_pin_value {
-            Ok(true) => {
-                let x = self.device.xpos().read();
-                let y = self.device.ypos().read();
-                let gesture = self.device.gesture_id().read();
-                if x.is_err() || y.is_err() || gesture.is_err() {
-                    return None;
-                }
-                let x = x.unwrap().value();
-                let y = y.unwrap().value();
-                let gesture = gesture.unwrap().value().unwrap();
-                let point: Point = (x, y);
-
-                Some(TouchEvent { point, gesture })
-            }
-            _ => None,
+        let x = self.device.xpos().read();
+        let y = self.device.ypos().read();
+        let b0 = self.device.bpc_0().read();
+        let b1 = self.device.bpc_1().read();
+        let gesture = self.device.gesture_id().read();
+        if x.is_err() || y.is_err() || gesture.is_err() || b0.is_err() || b1.is_err() {
+            return None;
         }
+        let x = x.unwrap().value();
+        let y = y.unwrap().value();
+        let bpc0 = b0.unwrap().value();
+        let bpc1 = b1.unwrap().value();
+        let gesture = gesture.unwrap().value().unwrap();
+        let point: Point = (x, y);
+
+        Some(TouchEvent {
+            point,
+            bpc0,
+            bpc1,
+            gesture,
+        })
     }
 }
 
@@ -106,6 +134,8 @@ pub type Point = (u16, u16);
 pub struct TouchEvent {
     /// Where on the screen was the touch registered.
     pub point: Point,
+    pub bpc0: u16,
+    pub bpc1: u16,
     /// What type of gesture was registered,
     pub gesture: device::Gesture,
 }

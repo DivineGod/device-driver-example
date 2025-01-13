@@ -176,6 +176,7 @@ fn main() -> ! {
 
     // Setup Touch Driver
     touchpad.reset(&mut delay_wrapper).unwrap();
+    touchpad.init_config().unwrap();
 
     /* End Touch Driver Setup */
 

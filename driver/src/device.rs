@@ -100,6 +100,7 @@ device_driver::create_device! {
     register BPC0H {
       type Access = RO;
       const ADDRESS = 0xB0;
+      const ALLOW_ADDRESS_OVERLAP = true;
       const SIZE_BITS = 8;
       value: uint = 0..8,
     },
@@ -107,13 +108,24 @@ device_driver::create_device! {
     register BPC0L {
       type Access = RO;
       const ADDRESS = 0xB1;
+      const ALLOW_ADDRESS_OVERLAP = true;
       const SIZE_BITS = 8;
       value: uint = 0..8,
+    },
+    register BPC0 {
+      type Access = RO;
+      type ByteOrder = BE;
+      const ADDRESS = 0xB0;
+      const ALLOW_ADDRESS_OVERLAP = true;
+      const SIZE_BITS = 16;
+
+      value: uint = 0..16,
     },
     /// 8 high bits of the 16bit BPC1 value
     register BPC1H {
       type Access = RO;
       const ADDRESS = 0xB2;
+      const ALLOW_ADDRESS_OVERLAP = true;
       const SIZE_BITS = 8;
       value: uint = 0..8,
     },
@@ -121,8 +133,18 @@ device_driver::create_device! {
     register BPC1L {
       type Access = RO;
       const ADDRESS = 0xB3;
+      const ALLOW_ADDRESS_OVERLAP = true;
       const SIZE_BITS = 8;
       value: uint = 0..8,
+    },
+    register BPC1 {
+      type Access = RO;
+      type ByteOrder = BE;
+      const ADDRESS = 0xB2;
+      const ALLOW_ADDRESS_OVERLAP = true;
+      const SIZE_BITS = 16;
+
+      value: uint = 0..16,
     },
     /// ProjectId Register
     register ChipId {
