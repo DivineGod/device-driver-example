@@ -10,11 +10,11 @@ embedded-graphics = "0.8.1"
 embedded-hal = "1.0.0"
 fugit = "0.3.7"
 heapless = "0.8.0"
-nb = "1.1.0"
+# nb = "1.1.0"
 panic-halt = "1.0.0"
 rp2040-boot2 = "0.3.0"
 rp2040-hal = "0.11.0"
 gc9a01a_driver = "1.0.0"
-waveshare-rp2040-touch-lcd-1-28 = { path = "../../../rp-hal-boards/boards/waveshare-rp2040-touch-lcd-1-28/" }
+waveshare-rp2040-touch-lcd-1-28 = { git = "https://github.com/DivineGod/rp-hal-boards", branch = "feat/waveshare-touch-lcd-1.28" }
 device-driver = { version = "1.0.0", default-features = false }
-cst816s-device-driver = { path = "../driver" }
+cst816s-device-driver = { path = "../../driver" }

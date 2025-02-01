@@ -1,0 +1,40 @@
+[package]
+edition = "2021"
+name = "esp32c6"
+version = "0.1.0"
+
+[[bin]]
+name = "esp32c6"
+path = "./src/bin/main.rs"
+
+[dependencies]
+critical-section = "1.2.0"
+cst816s-device-driver = { path = "../../driver", features = ["defmt-03"] }
+defmt = "0.3.10"
+defmt-rtt = "0.4.1"
+device-driver = { version = "1.0.0", default-features = false }
+embedded-graphics = "0.8.1"
+fugit = "0.3.7"
+heapless = "0.8.0"
+esp-backtrace = { version = "0.15.0", features = [
+    "defmt",
+    "esp32c6",
+    "exception-handler",
+    "panic-handler",
+] }
+esp-hal = { version = "0.23.1", features = ["defmt", "esp32c6", "unstable"] }
+gc9a01a_driver = "1.0.0"
+
+[profile.dev]
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1        # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false

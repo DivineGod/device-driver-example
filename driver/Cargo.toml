@@ -19,7 +19,7 @@ defmt = { version = "0.3", optional = true }
 embedded-hal = "1"
 
 [features]
-defmt-03 = ["dep:defmt", "device-driver/defmt-03"]
+defmt-03 = ["dep:defmt", "device-driver/defmt-03", "embedded-hal/defmt-03"]
 
 [dev-dependencies]
 embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async"] }

@@ -45,8 +45,10 @@ where
     ///
     /// Make sure the device is in "dynamic mode" by pulling the reset pin low for 20ms, then setting it high again.
     pub fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), TPRST::Error> {
+        self.reset_pin.set_high()?;
+        delay.delay_ms(50);
         self.reset_pin.set_low()?;
-        delay.delay_ms(20);
+        delay.delay_ms(5);
         self.reset_pin.set_high()?;
         delay.delay_ms(50);
         Ok(())
@@ -54,27 +56,12 @@ where
 
     /// Set initial default config
     pub fn init_config(&mut self) -> Result<(), DeviceError<I2C::Error>> {
-        self.device.irq_ctl().write(|irq_ctl| {
-            irq_ctl.set_en_test(false);
-            irq_ctl.set_en_touch(true);
-            irq_ctl.set_once_wlp(true);
-            irq_ctl.set_en_change(false);
-            irq_ctl.set_en_motion(false);
-        })?;
-        self.device.motion_mask().write(|mask| {
-            mask.set_en_d_click(true);
-            mask.set_en_con_lr(false);
-            mask.set_en_con_ud(false);
-        })?;
-        self.device.motion_sl_angle().write(|m| m.set_value(0))?;
-        self.device.lp_scan_th().write(|m| m.set_value(48))?;
-        self.device.lp_scan_win().write(|m| m.set_value(3))?;
-        self.device.lp_scan_freq().write(|m| m.set_value(7))?;
-        self.device.lp_scan_idac().write(|m| m.set_value(1))?;
-        self.device.auto_reset().write(|m| m.set_value(5))?;
-        self.device.dis_auto_sleep().write(|m| m.set_value(1))?;
-
-        Ok(())
+        self.device.dis_auto_sleep().write(|m| m.set_value(0xfe))?;
+        self.device
+            .irq_pulse_width()
+            .write(|m| m.set_value(PulseWidth::new(1)))?;
+        self.device.nor_scan_per().write(|m| m.set_value(1))?;
+        return Ok(());
     }
 
     /// Read the ChipId register if the device is available for reads
