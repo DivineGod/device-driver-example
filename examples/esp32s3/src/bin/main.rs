@@ -7,9 +7,10 @@ use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle, MonoTextStyleBuilder},
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{PrimitiveStyle, Rectangle},
+    primitives::{Circle, PrimitiveStyle, Rectangle, Triangle},
     text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
+use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
 use esp_hal::{
     clock::CpuClock,
@@ -17,12 +18,19 @@ use esp_hal::{
     gpio::{Input, Level, Output, Pull},
     i2c::{self},
     main,
+    rtc_cntl::Rtc,
     spi::{self, Mode},
+    timer::timg::TimerGroup,
 };
 use fugit::RateExtU32;
-use gc9a01a_driver::{FrameBuffer, Orientation, Region, GC9A01A};
 use heapless::String;
 use log::info;
+
+// Provides the parallel port and display interface builders
+use mipidsi::{interface::SpiInterface, options::Orientation};
+
+// Provides the Display builder
+use mipidsi::Builder;
 
 const LCD_WIDTH: u32 = 240;
 const LCD_HEIGHT: u32 = 240;
@@ -52,6 +60,17 @@ fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
+    // Disable the RTC and TIMG watchdog timers
+    let mut rtc = Rtc::new(peripherals.LPWR);
+    let timer_group0 = TimerGroup::new(peripherals.TIMG0);
+    let mut wdt0 = timer_group0.wdt;
+    let timer_group1 = TimerGroup::new(peripherals.TIMG1);
+    let mut wdt1 = timer_group1.wdt;
+    rtc.swd.disable();
+    rtc.rwdt.disable();
+    wdt0.disable();
+    wdt1.disable();
+
     esp_println::logger::init_logger_from_env();
 
     let miso = peripherals.GPIO12;
@@ -80,38 +99,26 @@ fn main() -> ! {
     .with_miso(miso)
     .with_mosi(mosi);
 
+    let spi_device = ExclusiveDevice::new_no_delay(driver, lcd_cs).unwrap();
+
     info!("Spi Driver configured!");
+    let mut delay = Delay::new();
 
     // Initialize the display using SPI
-    let mut display = GC9A01A::new(
-        driver, lcd_dc, lcd_cs, lcd_rst, false, LCD_WIDTH, LCD_HEIGHT,
-    );
+    let mut buffer = [0_u8; 512];
+    let di = SpiInterface::new(spi_device, lcd_dc, &mut buffer);
+    // Use the delay wrapper when initializing the display
+    let mut display = Builder::new(mipidsi::models::GC9A01, di)
+        .reset_pin(lcd_rst)
+        .init(&mut delay)
+        .unwrap();
 
     info!("Display Driver configured!");
 
-    let mut delay = Delay::new();
-    // We need to wrap the delay in a newtype to be able to implement embedded_hal::delay::DelayNs as this is required
-    // for the display and the touch driver
-    let mut delay_wrapper = DelayWrapper::new(&mut delay);
+    // Make the display all black
+    display.clear(Rgb565::BLACK).unwrap();
 
-    // Use the delay wrapper when initializing the display
-    display.init(&mut delay_wrapper).unwrap();
-
-    // Set the orientation so the USB port is down and text is left-to-right
-    display.set_orientation(&Orientation::Portrait).unwrap();
-
-    // Using a frame buffer for managing drawing to the display will make the updates look a lot smoother
-    // Allocate the buffer in main and pass it to the FrameBuffer
-    let mut background_buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    let mut background_framebuffer =
-        FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
-    let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
-    background_framebuffer.clear(Rgb565::BLACK);
-
-    // Clear the screen before turning on the backlight
-    display.clear_screen(Rgb565::WHITE.into_storage()).unwrap();
-    delay.delay_millis(100); // Delay a little bit to avoid a screen flash
+    delay.delay_millis(1);
     lcd_bl.set_high();
 
     // Setup Touch Driver
@@ -178,34 +185,81 @@ fn main() -> ! {
         let _ = write!(data, "({x:03},{y:03})").unwrap();
 
         // Draw centered text
-        let text_bounding_region = draw_text_with_background(
-            &mut framebuffer,
+        let center = display.bounding_box().center();
+        draw_text_with_background(
+            &mut display,
             data.as_str(),
-            display.bounding_box().center(),
+            center,
             text_style,
             color,
             Rgb565::BLACK,
-        );
-        display.store_region(text_bounding_region).unwrap();
+        )
+        .unwrap();
 
-        //Display the next set of regions.
-        display.show_regions(framebuffer.get_buffer()).unwrap();
-        //reset the display frame buffer from the background for the regions just displayed.
-        framebuffer.copy_regions(background_framebuffer.get_buffer(), display.get_regions());
-        //clear out the regions from the display so its ready to start again.
-        display.clear_regions();
         delay.delay_millis(10);
     }
 }
 
-fn draw_text_with_background(
-    framebuffer: &mut FrameBuffer,
+fn draw_smiley<T: DrawTarget<Color = Rgb565>>(display: &mut T) -> Result<(), T::Error> {
+    // Draw the left eye as a circle located at (50, 100), with a diameter of 40, filled with white
+    Circle::new(Point::new(50, 100), 40)
+        .into_styled(PrimitiveStyle::with_fill(Rgb565::WHITE))
+        .draw(display)?;
+
+    // Draw the right eye as a circle located at (50, 200), with a diameter of 40, filled with white
+    Circle::new(Point::new(50, 200), 40)
+        .into_styled(PrimitiveStyle::with_fill(Rgb565::WHITE))
+        .draw(display)?;
+
+    // Draw an upside down red triangle to represent a smiling mouth
+    Triangle::new(
+        Point::new(130, 140),
+        Point::new(130, 200),
+        Point::new(160, 170),
+    )
+    .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
+    .draw(display)?;
+
+    // Cover the top part of the mouth with a black triangle so it looks closed instead of open
+    Triangle::new(
+        Point::new(130, 150),
+        Point::new(130, 190),
+        Point::new(150, 170),
+    )
+    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+    .draw(display)?;
+
+    Ok(())
+}
+/*
+    // Set the orientation so the USB port is down and text is left-to-right
+    display.set_orientation(mipidsi::)
+
+    // Using a frame buffer for managing drawing to the display will make the updates look a lot smoother
+    // Allocate the buffer in main and pass it to the FrameBuffer
+    let mut background_buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+    let mut background_framebuffer =
+        FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
+    let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+    let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
+    background_framebuffer.clear(Rgb565::BLACK);
+
+    // Clear the screen before turning on the backlight
+    display.clear_screen(Rgb565::WHITE.into_storage()).unwrap();
+    delay.delay_millis(100); // Delay a little bit to avoid a screen flash
+    lcd_bl.set_high();
+
+}
+*/
+
+fn draw_text_with_background<T: DrawTarget<Color = Rgb565>>(
+    framebuffer: &mut T,
     text: &str,
     position: Point,
     text_style: TextStyle,
     text_color: Rgb565,
     background_color: Rgb565,
-) -> Region {
+) -> Result<(), T::Error> {
     let character_style = MonoTextStyleBuilder::new()
         .font(&FONT_10X20)
         .text_color(text_color)
@@ -219,18 +273,12 @@ fn draw_text_with_background(
     // Draw the background
     Rectangle::new(position, text_area.size)
         .into_styled(PrimitiveStyle::with_fill(background_color))
-        .draw(framebuffer)
-        .unwrap();
+        .draw(framebuffer)?;
 
     // Draw the text
-    text.draw(framebuffer).unwrap();
+    text.draw(framebuffer)?;
 
     // Return the bounding box
     // Added 22 width on the Region to accom0date larger numbers
-    Region {
-        x: text_area.top_left.x as u16,
-        y: text_area.top_left.y as u16,
-        width: text_area.size.width + 22,
-        height: text_area.size.height * 2,
-    }
+    Ok(())
 }

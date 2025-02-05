@@ -23,9 +23,9 @@ esp-backtrace = { version = "0.15.0", features = [
 esp-hal = { version = "0.23.1", features = ["esp32s3", "unstable"] }
 esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
 fugit = "0.3.7"
-gc9a01a_driver = "1.0.0"
 heapless = "0.8.0"
 log = { version = "0.4.21" }
+mipidsi = "0.9.0"
 
 [profile.dev]
 # Rust debug is too slow.
