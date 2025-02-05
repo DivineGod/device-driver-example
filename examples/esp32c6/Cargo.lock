@@ -200,6 +200,7 @@ dependencies = [
 [[package]]
 name = "device-driver"
 version = "1.0.2"
+source = "git+https://github.com/DivineGod/device-driver?branch=fix%2Fradium#c0193a2f106e34a984a9ee21cc7f56f791c17bbb"
 dependencies = [
  "bitvec",
  "defmt",
@@ -211,6 +212,7 @@ dependencies = [
 [[package]]
 name = "device-driver-generation"
 version = "1.0.2"
+source = "git+https://github.com/DivineGod/device-driver?branch=fix%2Fradium#c0193a2f106e34a984a9ee21cc7f56f791c17bbb"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -224,6 +226,7 @@ dependencies = [
 [[package]]
 name = "device-driver-macros"
 version = "1.0.2"
+source = "git+https://github.com/DivineGod/device-driver?branch=fix%2Fradium#c0193a2f106e34a984a9ee21cc7f56f791c17bbb"
 dependencies = [
  "device-driver-generation",
  "proc-macro2",

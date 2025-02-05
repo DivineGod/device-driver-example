@@ -10,7 +10,7 @@ path = "./src/bin/main.rs"
 [dependencies]
 critical-section = "1.2.0"
 cst816s-device-driver = { path = "../../driver" }
-device-driver = { path = "../../../../device-driver/device-driver/", default-features = false }
+device-driver = { git = "https://github.com/DivineGod/device-driver", branch = "fix/radium", default-features = false }
 embedded-graphics = "0.8.1"
 embedded-hal = "1.0.0"
 embedded-hal-bus = "0.2.0"

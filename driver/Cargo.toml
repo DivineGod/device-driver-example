@@ -12,7 +12,7 @@ keywords = [
 ]
 
 [dependencies]
-device-driver = { path = "../../../device-driver/device-driver/", default-features = false, features = [
+device-driver = { git = "https://github.com/DivineGod/device-driver", branch = "fix/radium", default-features = false, features = [
     "dsl",
 ] }
 defmt = { version = "0.3", optional = true }
