@@ -19,7 +19,6 @@ use esp_hal::{
     gpio::{Input, Level, Output, Pull},
     i2c::{self},
     main,
-    peripherals::{self, SPI2},
     spi::{self, Mode},
 };
 use fugit::RateExtU32;
@@ -31,7 +30,7 @@ const LCD_HEIGHT: u32 = 240;
 // Define static buffers
 const BUFFER_SIZE: usize = (LCD_WIDTH * LCD_HEIGHT * 2) as usize;
 // 16 FPS  Is as fast as I can update the arrow smoothly so all frames are as fast as the slowest.
-const DESIRED_FRAME_DURATION_US: u32 = 1_000_000 / 16;
+// const DESIRED_FRAME_DURATION_US: u32 = 1_000_000 / 16;
 
 #[main]
 fn main() -> ! {
@@ -56,7 +55,7 @@ fn main() -> ! {
     let driver = spi::master::Spi::new(
         peripherals.SPI2,
         esp_hal::spi::master::Config::default()
-            .with_frequency(100.kHz())
+            .with_frequency(40.MHz())
             .with_mode(Mode::_0),
     )
     .unwrap()

@@ -1,29 +1,31 @@
 [package]
 edition = "2021"
-name = "esp32c6"
+name = "esp32s3"
 version = "0.1.0"
 
 [[bin]]
-name = "esp32c6"
+name = "esp32s3"
 path = "./src/bin/main.rs"
 
 [dependencies]
 critical-section = "1.2.0"
-cst816s-device-driver = { path = "../../driver", features = ["defmt-03"] }
-defmt = "0.3.10"
-defmt-rtt = "0.4.1"
+cst816s-device-driver = { path = "../../driver" }
 device-driver = { path = "../../../../device-driver/device-driver/", default-features = false }
 embedded-graphics = "0.8.1"
+embedded-hal = "1.0.0"
+embedded-hal-bus = "0.2.0"
 esp-backtrace = { version = "0.15.0", features = [
-    "defmt",
-    "esp32c6",
+    "esp32s3",
     "exception-handler",
     "panic-handler",
+    "println",
 ] }
-esp-hal = { version = "0.23.1", features = ["defmt", "esp32c6", "unstable"] }
+esp-hal = { version = "0.23.1", features = ["esp32s3", "unstable"] }
+esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
 fugit = "0.3.7"
 gc9a01a_driver = "1.0.0"
 heapless = "0.8.0"
+log = { version = "0.4.21" }
 
 [profile.dev]
 # Rust debug is too slow.

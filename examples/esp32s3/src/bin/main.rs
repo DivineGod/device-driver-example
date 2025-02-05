@@ -1,50 +1,35 @@
-//! Example of graphics on the LCD of the Waveshare RP2040-LCD-1.28
-//!
-//! Draws a red and green line with a blue rectangle.
-//! After that it fills the screen line for line, at the end it starts over with
-//! another colour, RED, GREEN and BLUE.
 #![no_std]
 #![no_main]
 
-use cortex_m::delay::Delay;
-use cst816s_device_driver::{device, CST816S};
-use embedded_graphics::mono_font::ascii::FONT_10X20;
-use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
-use embedded_graphics::text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder};
-use embedded_hal::delay::DelayNs;
-use fugit::RateExtU32;
-use gc9a01a_driver::{FrameBuffer, Orientation, Region, GC9A01A};
-use panic_halt as _;
-use rp2040_hal::Timer;
-
 use core::fmt::Write;
-use heapless::String;
-
-use waveshare_rp2040_touch_lcd_1_28::entry;
-use waveshare_rp2040_touch_lcd_1_28::{
-    hal::{
-        self,
-        clocks::{init_clocks_and_plls, Clock},
-        pac,
-        pio::PIOExt,
-        watchdog::Watchdog,
-        Sio,
-    },
-    Pins, XOSC_CRYSTAL_FREQ,
-};
-
+use cst816s_device_driver::{device, CST816S};
 use embedded_graphics::{
+    mono_font::{ascii::FONT_10X20, MonoTextStyle, MonoTextStyleBuilder},
     pixelcolor::Rgb565,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
+    text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
+use embedded_hal_bus::spi::ExclusiveDevice;
+use esp_backtrace as _;
+use esp_hal::{
+    clock::CpuClock,
+    delay::Delay,
+    gpio::{Input, Level, Output, Pull},
+    i2c::{self},
+    main,
+    peripherals::{self, SPI2},
+    spi::{self, Mode},
+};
+use fugit::RateExtU32;
+use gc9a01a_driver::{FrameBuffer, Orientation, Region, GC9A01A};
+use heapless::String;
+use log::info;
 
 const LCD_WIDTH: u32 = 240;
 const LCD_HEIGHT: u32 = 240;
 // Define static buffers
 const BUFFER_SIZE: usize = (LCD_WIDTH * LCD_HEIGHT * 2) as usize;
-// 16 FPS  Is as fast as I can update the arrow smoothly so all frames are as fast as the slowest.
-const DESIRED_FRAME_DURATION_US: u32 = 1_000_000 / 16;
 
 pub struct DelayWrapper<'a> {
     delay: &'a mut Delay,
@@ -56,81 +41,63 @@ impl<'a> DelayWrapper<'a> {
     }
 }
 
-impl<'a> DelayNs for DelayWrapper<'a> {
+impl<'a> embedded_hal::delay::DelayNs for DelayWrapper<'a> {
     fn delay_ns(&mut self, ns: u32) {
         let us = (ns + 999) / 1000; // Convert nanoseconds to microseconds
         self.delay.delay_us(us); // Use microsecond delay
     }
 }
-
-/// Main entry point for the application
-#[entry]
+#[main]
 fn main() -> ! {
-    // Take ownership of peripheral instances
-    let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
+    // generator version: 0.2.2
 
-    // Initialize watchdog
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
 
-    // Initialize clocks and PLLs (Phase-locked loop)
-    let clocks = init_clocks_and_plls(
-        XOSC_CRYSTAL_FREQ,
-        pac.XOSC,
-        pac.CLOCKS,
-        pac.PLL_SYS,
-        pac.PLL_USB,
-        &mut pac.RESETS,
-        &mut watchdog,
+    esp_println::logger::init_logger_from_env();
+
+    let miso = peripherals.GPIO12;
+    let mosi = peripherals.GPIO11;
+    let sclk = peripherals.GPIO10;
+    let lcd_cs = Output::new(peripherals.GPIO9, Level::High);
+    let lcd_dc = Output::new(peripherals.GPIO8, Level::Low);
+    let lcd_rst = Output::new(peripherals.GPIO14, Level::High);
+    let mut lcd_bl = Output::new(peripherals.GPIO2, Level::Low);
+
+    let i2c_sda = peripherals.GPIO6;
+    let i2c_scl = peripherals.GPIO7;
+    let touch_int = peripherals.GPIO5;
+    let touch_reset = peripherals.GPIO13;
+
+    info!("Driver configured!");
+
+    let driver = spi::master::Spi::new(
+        peripherals.SPI2,
+        esp_hal::spi::master::Config::default()
+            .with_frequency(80.MHz())
+            .with_mode(Mode::_0),
     )
-    .ok()
-    .unwrap();
+    .unwrap()
+    .with_sck(sclk)
+    .with_miso(miso)
+    .with_mosi(mosi);
 
-    // Initialize SIO (Single Cycle I/O)
-    let sio = Sio::new(pac.SIO);
-    let pins = Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
-
-    // Set up the delay for the first core
-    let sys_freq = clocks.system_clock.freq().to_Hz();
-    let mut delay = Delay::new(core.SYST, sys_freq);
-
-    let (mut _pio, _sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-
-    // Initialize LCD pins
-    let lcd_dc = pins.lcd_dc.into_push_pull_output();
-    let lcd_cs = pins.lcd_cs.into_push_pull_output();
-    let lcd_clk = pins.lcd_clk.into_function::<hal::gpio::FunctionSpi>();
-    let lcd_mosi = pins.lcd_mosi.into_function::<hal::gpio::FunctionSpi>();
-    let lcd_rst = pins
-        .lcd_rst
-        .into_push_pull_output_in_state(hal::gpio::PinState::High);
-    let lcd_bl = pins
-        .lcd_bl
-        .into_push_pull_output_in_state(hal::gpio::PinState::Low);
-
-    // Initialize SPI from the LCD pins
-    let spi = hal::Spi::<_, _, _, 8>::new(pac.SPI1, (lcd_mosi, lcd_clk));
-    let spi = spi.init(
-        &mut pac.RESETS,
-        clocks.peripheral_clock.freq(),
-        80.MHz(),
-        embedded_hal::spi::MODE_0,
-    );
+    info!("Spi Driver configured!");
 
     // Initialize the display using SPI
-    let mut display = GC9A01A::new(spi, lcd_dc, lcd_cs, lcd_rst, false, LCD_WIDTH, LCD_HEIGHT);
+    let mut display = GC9A01A::new(
+        driver, lcd_dc, lcd_cs, lcd_rst, false, LCD_WIDTH, LCD_HEIGHT,
+    );
 
+    info!("Display Driver configured!");
+
+    let mut delay = Delay::new();
     // We need to wrap the delay in a newtype to be able to implement embedded_hal::delay::DelayNs as this is required
     // for the display and the touch driver
     let mut delay_wrapper = DelayWrapper::new(&mut delay);
 
     // Use the delay wrapper when initializing the display
-    display.init(&mut delay_wrapper).unwrap();
+    display.init(&mut delay).unwrap();
 
     // Set the orientation so the USB port is down and text is left-to-right
     display.set_orientation(&Orientation::Portrait).unwrap();
@@ -142,41 +109,37 @@ fn main() -> ! {
         FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
     let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
-    background_framebuffer.clear(Rgb565::BLACK);
+    background_framebuffer.clear(Rgb565::WHITE);
 
     // Clear the screen before turning on the backlight
     display.clear_screen(Rgb565::BLACK.into_storage()).unwrap();
-    delay_wrapper.delay_ms(1); // Delay a little bit to avoid a screen flash
-    lcd_bl.into_push_pull_output_in_state(hal::gpio::PinState::High);
+    delay.delay_millis(100); // Delay a little bit to avoid a screen flash
+    lcd_bl.set_high();
 
     // Setup Touch Driver
     //
     // Set up the pins needed for the driver
-    let sda_pin = pins.i2c1_sda.reconfigure();
-    let scl_pin = pins.i2c1_scl.reconfigure();
-    let touch_interrupt_pin = pins.tp_int.into_pull_up_input();
+    let touch_interrupt_pin = Input::new(touch_int, Pull::Up);
     // Setup reset pin for touch driver
-    let touch_reset_pin = pins
-        .tp_rst
-        .into_push_pull_output_in_state(hal::gpio::PinState::High);
+    let touch_reset_pin = Output::new(touch_reset, Level::High);
 
     // Create the I²C driver, using the two pre-configured pins.
     // This will fail  at compile time if the pins are in the wrong mode, or if
     // this I²C peripheral isn't available on these pins!
-    let i2c = hal::I2C::i2c1(
-        pac.I2C1,
-        sda_pin,
-        scl_pin,
-        400.kHz(),
-        &mut pac.RESETS,
-        &clocks.system_clock,
-    );
+    let i2c = i2c::master::I2c::new(
+        peripherals.I2C0,
+        esp_hal::i2c::master::Config::default().with_frequency(400.kHz()),
+    )
+    .unwrap()
+    .with_sda(i2c_sda)
+    .with_scl(i2c_scl);
 
     let mut touchpad = CST816S::new(i2c, 0x15, touch_interrupt_pin, touch_reset_pin);
 
     // Setup Touch Driver
-    touchpad.reset(&mut delay_wrapper).unwrap();
+    touchpad.reset(&mut delay).unwrap();
     touchpad.init_config().unwrap();
+    info!("Driver configured!");
 
     /* End Touch Driver Setup */
 
@@ -193,8 +156,12 @@ fn main() -> ! {
     loop {
         // Read a touch event from the touch driver and update last_touch if there is a valid event
         if let Some(touch_event) = touchpad.event() {
+            info!("touch Event {}", touch_event.point.0);
             color = match touch_event.gesture {
-                device::Gesture::NoGesture => Rgb565::WHITE,
+                device::Gesture::NoGesture => {
+                    info!("no gesture");
+                    Rgb565::WHITE
+                }
                 device::Gesture::SlideUp => Rgb565::RED,
                 device::Gesture::SlideDown => Rgb565::BLUE,
                 device::Gesture::SlideLeft => Rgb565::YELLOW,
@@ -208,7 +175,7 @@ fn main() -> ! {
 
         // `write` for `heapless::String` returns an error if the buffer is full,
         // but because the buffer here is 9 bytes large, the `(xxx:yyy)` will fit.
-        let mut data = String::<19>::new(); // 9 byte string buffer
+        let mut data = String::<9>::new(); // 9 byte string buffer
         let (x, y) = last_touch;
         let _ = write!(data, "({x:03},{y:03})").unwrap();
 
@@ -221,20 +188,24 @@ fn main() -> ! {
             color,
             Rgb565::BLACK,
         );
-
-        if let Ok(_) = display.store_region(text_bounding_region) {
-            // hrm
-        }
+        display.store_region(text_bounding_region).unwrap();
 
         //Display the next set of regions.
-        if let Ok(_) = display.show_regions(framebuffer.get_buffer()) {
-            // oops, what?
-        }
+        display.show_regions(framebuffer.get_buffer()).unwrap();
         //reset the display frame buffer from the background for the regions just displayed.
         framebuffer.copy_regions(background_framebuffer.get_buffer(), display.get_regions());
         //clear out the regions from the display so its ready to start again.
         display.clear_regions();
+        delay.delay_millis(10);
     }
+
+    info!("Driver configured!");
+
+    loop {
+        info!("Hello world!");
+    }
+
+    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin
 }
 
 fn draw_text_with_background(

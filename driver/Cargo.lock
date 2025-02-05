@@ -22,15 +22,20 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitvec"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
+version = "1.1.0"
+source = "git+https://github.com/alexanderkjall/bitvec?branch=upgrade-radium-to-1#d75be941d6e12975f2b06c42535b06b4db91df3b"
 dependencies = [
  "funty",
  "radium",
  "tap",
  "wyz",
 ]
+
+[[package]]
+name = "cfg-if"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "convert_case"
@@ -87,8 +92,6 @@ dependencies = [
 [[package]]
 name = "device-driver"
 version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d66a318c4a767a431dcf65b389820b616839ebf18aa449444110ac228c59c99"
 dependencies = [
  "bitvec",
  "defmt",
@@ -100,8 +103,6 @@ dependencies = [
 [[package]]
 name = "device-driver-generation"
 version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "301737465a8ca38ce3f2d2c2a9ee25bd3d365ef894cd96305737bbbcc991925a"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -115,8 +116,6 @@ dependencies = [
 [[package]]
 name = "device-driver-macros"
 version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7c867e869c87e0d0e1b569bc9f0db257c9eb764f2838cb7f6632d9c2f891e83"
 dependencies = [
  "device-driver-generation",
  "proc-macro2",
@@ -458,9 +457,12 @@ dependencies = [
 
 [[package]]
 name = "radium"
-version = "0.7.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+checksum = "db0b76288902db304c864a12046b73d2d895cc34a4bb8137baaeebe9978a072c"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "slab"

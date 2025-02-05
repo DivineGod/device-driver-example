@@ -54,7 +54,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
  "funty",
- "radium",
+ "radium 0.7.0",
+ "tap",
+ "wyz",
+]
+
+[[package]]
+name = "bitvec"
+version = "1.1.0"
+source = "git+https://github.com/alexanderkjall/bitvec?branch=upgrade-radium-to-1#d75be941d6e12975f2b06c42535b06b4db91df3b"
+dependencies = [
+ "funty",
+ "radium 1.1.0",
  "tap",
  "wyz",
 ]
@@ -64,6 +75,12 @@ name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
+name = "cfg-if"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "convert_case"
@@ -103,7 +120,7 @@ checksum = "e37549a379a9e0e6e576fd208ee60394ccb8be963889eebba3ffe0980364f472"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.96",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -125,7 +142,7 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "cst816s-device-driver"
 version = "0.1.0"
 dependencies = [
- "device-driver",
+ "device-driver 1.0.2",
  "embedded-hal 1.0.0",
 ]
 
@@ -138,11 +155,20 @@ checksum = "f578e8e2c440e7297e008bb5486a3a8a194775224bbc23729b0dbdfaeebf162e"
 [[package]]
 name = "device-driver"
 version = "1.0.2"
+dependencies = [
+ "bitvec 1.1.0",
+ "device-driver-macros",
+ "embedded-io",
+ "embedded-io-async",
+]
+
+[[package]]
+name = "device-driver"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d66a318c4a767a431dcf65b389820b616839ebf18aa449444110ac228c59c99"
 dependencies = [
- "bitvec",
- "device-driver-macros",
+ "bitvec 1.0.1",
  "embedded-io",
  "embedded-io-async",
 ]
@@ -150,27 +176,23 @@ dependencies = [
 [[package]]
 name = "device-driver-generation"
 version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "301737465a8ca38ce3f2d2c2a9ee25bd3d365ef894cd96305737bbbcc991925a"
 dependencies = [
  "anyhow",
- "bitvec",
+ "bitvec 1.1.0",
  "convert_case",
  "itertools 0.14.0",
  "proc-macro2",
  "quote",
- "syn 2.0.96",
+ "syn 2.0.98",
 ]
 
 [[package]]
 name = "device-driver-macros"
 version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7c867e869c87e0d0e1b569bc9f0db257c9eb764f2838cb7f6632d9c2f891e83"
 dependencies = [
  "device-driver-generation",
  "proc-macro2",
- "syn 2.0.96",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -294,7 +316,7 @@ checksum = "e99b8b3c28ae0e84b604c75f721c21dc77afb3706076af5e8216d15fd1deaae3"
 dependencies = [
  "frunk_proc_macro_helpers",
  "quote",
- "syn 2.0.96",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -306,7 +328,7 @@ dependencies = [
  "frunk_core",
  "proc-macro2",
  "quote",
- "syn 2.0.96",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -481,6 +503,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
+name = "radium"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db0b76288902db304c864a12046b73d2d895cc34a4bb8137baaeebe9978a072c"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -608,9 +639,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.96"
+version = "2.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5d0adab1ae378d7f53bdebc67a39f1f151407ef230f0ce2883572f5d8985c80"
+checksum = "36147f1a48ae0ec2b5b3bc5b537d267457555a10dc06f3dbc8cb11ba3006d3b1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -630,7 +661,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "cst816s-device-driver",
- "device-driver",
+ "device-driver 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-graphics",
  "embedded-hal 1.0.0",
  "fugit",
