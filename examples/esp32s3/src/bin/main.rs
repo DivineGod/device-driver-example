@@ -10,7 +10,6 @@ use embedded_graphics::{
     primitives::{PrimitiveStyle, Rectangle},
     text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
-use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
 use esp_hal::{
     clock::CpuClock,
@@ -18,7 +17,6 @@ use esp_hal::{
     gpio::{Input, Level, Output, Pull},
     i2c::{self},
     main,
-    peripherals::{self, SPI2},
     spi::{self, Mode},
 };
 use fugit::RateExtU32;
@@ -74,7 +72,7 @@ fn main() -> ! {
     let driver = spi::master::Spi::new(
         peripherals.SPI2,
         esp_hal::spi::master::Config::default()
-            .with_frequency(80.MHz())
+            .with_frequency(40.MHz())
             .with_mode(Mode::_0),
     )
     .unwrap()
@@ -97,7 +95,7 @@ fn main() -> ! {
     let mut delay_wrapper = DelayWrapper::new(&mut delay);
 
     // Use the delay wrapper when initializing the display
-    display.init(&mut delay).unwrap();
+    display.init(&mut delay_wrapper).unwrap();
 
     // Set the orientation so the USB port is down and text is left-to-right
     display.set_orientation(&Orientation::Portrait).unwrap();
@@ -109,10 +107,10 @@ fn main() -> ! {
         FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
     let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
-    background_framebuffer.clear(Rgb565::WHITE);
+    background_framebuffer.clear(Rgb565::BLACK);
 
     // Clear the screen before turning on the backlight
-    display.clear_screen(Rgb565::BLACK.into_storage()).unwrap();
+    display.clear_screen(Rgb565::WHITE.into_storage()).unwrap();
     delay.delay_millis(100); // Delay a little bit to avoid a screen flash
     lcd_bl.set_high();
 
@@ -144,7 +142,7 @@ fn main() -> ! {
     /* End Touch Driver Setup */
 
     let mut character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::CYAN);
-    character_style.background_color = Some(Rgb565::BLACK);
+    character_style.background_color = Some(Rgb565::WHITE);
     let text_style = TextStyleBuilder::new()
         .baseline(Baseline::Middle)
         .alignment(Alignment::Center)
@@ -198,14 +196,6 @@ fn main() -> ! {
         display.clear_regions();
         delay.delay_millis(10);
     }
-
-    info!("Driver configured!");
-
-    loop {
-        info!("Hello world!");
-    }
-
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.23.1/examples/src/bin
 }
 
 fn draw_text_with_background(
