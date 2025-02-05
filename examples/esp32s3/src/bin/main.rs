@@ -27,15 +27,15 @@ use heapless::String;
 use log::info;
 
 // Provides the parallel port and display interface builders
-use mipidsi::{interface::SpiInterface, options::Orientation};
+use mipidsi::interface::SpiInterface;
 
 // Provides the Display builder
 use mipidsi::Builder;
 
-const LCD_WIDTH: u32 = 240;
-const LCD_HEIGHT: u32 = 240;
+const LCD_WIDTH: u16 = 240;
+const LCD_HEIGHT: u16 = 240;
 // Define static buffers
-const BUFFER_SIZE: usize = (LCD_WIDTH * LCD_HEIGHT * 2) as usize;
+// const BUFFER_SIZE: usize = (LCD_WIDTH as u32 * LCD_HEIGHT as u32 * 2) as usize;
 
 pub struct DelayWrapper<'a> {
     delay: &'a mut Delay,
@@ -110,6 +110,9 @@ fn main() -> ! {
     // Use the delay wrapper when initializing the display
     let mut display = Builder::new(mipidsi::models::GC9A01, di)
         .reset_pin(lcd_rst)
+        .display_size(LCD_WIDTH, LCD_HEIGHT)
+        .color_order(mipidsi::options::ColorOrder::Bgr)
+        .invert_colors(mipidsi::options::ColorInversion::Inverted)
         .init(&mut delay)
         .unwrap();
 
@@ -119,7 +122,7 @@ fn main() -> ! {
     display.clear(Rgb565::BLACK).unwrap();
 
     delay.delay_millis(1);
-    lcd_bl.set_high();
+    delay.delay_millis(10000);
 
     // Setup Touch Driver
     //
@@ -149,7 +152,7 @@ fn main() -> ! {
     /* End Touch Driver Setup */
 
     let mut character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::CYAN);
-    character_style.background_color = Some(Rgb565::WHITE);
+    character_style.background_color = Some(Rgb565::BLACK);
     let text_style = TextStyleBuilder::new()
         .baseline(Baseline::Middle)
         .alignment(Alignment::Center)
@@ -231,26 +234,6 @@ fn draw_smiley<T: DrawTarget<Color = Rgb565>>(display: &mut T) -> Result<(), T::
 
     Ok(())
 }
-/*
-    // Set the orientation so the USB port is down and text is left-to-right
-    display.set_orientation(mipidsi::)
-
-    // Using a frame buffer for managing drawing to the display will make the updates look a lot smoother
-    // Allocate the buffer in main and pass it to the FrameBuffer
-    let mut background_buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    let mut background_framebuffer =
-        FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
-    let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
-    background_framebuffer.clear(Rgb565::BLACK);
-
-    // Clear the screen before turning on the backlight
-    display.clear_screen(Rgb565::WHITE.into_storage()).unwrap();
-    delay.delay_millis(100); // Delay a little bit to avoid a screen flash
-    lcd_bl.set_high();
-
-}
-*/
 
 fn draw_text_with_background<T: DrawTarget<Color = Rgb565>>(
     framebuffer: &mut T,

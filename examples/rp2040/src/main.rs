@@ -13,9 +13,9 @@ use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder};
 use embedded_hal::delay::DelayNs;
 use fugit::RateExtU32;
-use gc9a01a_driver::{FrameBuffer, Orientation, Region, GC9A01A};
+use mipidsi::interface::SpiInterface;
+use mipidsi::Builder;
 use panic_halt as _;
-use rp2040_hal::Timer;
 
 use core::fmt::Write;
 use heapless::String;
@@ -39,10 +39,10 @@ use embedded_graphics::{
     primitives::{PrimitiveStyle, Rectangle},
 };
 
-const LCD_WIDTH: u32 = 240;
-const LCD_HEIGHT: u32 = 240;
+const LCD_WIDTH: u16 = 240;
+const LCD_HEIGHT: u16 = 240;
 // Define static buffers
-const BUFFER_SIZE: usize = (LCD_WIDTH * LCD_HEIGHT * 2) as usize;
+const BUFFER_SIZE: usize = (LCD_WIDTH as u32 * LCD_HEIGHT as u32 * 2) as usize;
 // 16 FPS  Is as fast as I can update the arrow smoothly so all frames are as fast as the slowest.
 const DESIRED_FRAME_DURATION_US: u32 = 1_000_000 / 16;
 
@@ -118,34 +118,27 @@ fn main() -> ! {
     let spi = spi.init(
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
-        80.MHz(),
+        20.MHz(),
         embedded_hal::spi::MODE_0,
     );
+    let spi_device = embedded_hal_bus::spi::ExclusiveDevice::new_no_delay(spi, lcd_cs).unwrap();
 
-    // Initialize the display using SPI
-    let mut display = GC9A01A::new(spi, lcd_dc, lcd_cs, lcd_rst, false, LCD_WIDTH, LCD_HEIGHT);
+    let mut buffer = [0_u8; 512];
+    let di = SpiInterface::new(spi_device, lcd_dc, &mut buffer);
 
-    // We need to wrap the delay in a newtype to be able to implement embedded_hal::delay::DelayNs as this is required
-    // for the display and the touch driver
     let mut delay_wrapper = DelayWrapper::new(&mut delay);
 
-    // Use the delay wrapper when initializing the display
-    display.init(&mut delay_wrapper).unwrap();
-
-    // Set the orientation so the USB port is down and text is left-to-right
-    display.set_orientation(&Orientation::Portrait).unwrap();
-
-    // Using a frame buffer for managing drawing to the display will make the updates look a lot smoother
-    // Allocate the buffer in main and pass it to the FrameBuffer
-    let mut background_buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    let mut background_framebuffer =
-        FrameBuffer::new(&mut background_buffer, LCD_WIDTH, LCD_HEIGHT);
-    let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    let mut framebuffer = FrameBuffer::new(&mut buffer, LCD_WIDTH, LCD_HEIGHT);
-    background_framebuffer.clear(Rgb565::BLACK);
+    // Initialize the display using SPI
+    let mut display = Builder::new(mipidsi::models::GC9A01, di)
+        .reset_pin(lcd_rst)
+        .display_size(LCD_WIDTH, LCD_HEIGHT)
+        .color_order(mipidsi::options::ColorOrder::Bgr)
+        .invert_colors(mipidsi::options::ColorInversion::Inverted)
+        .init(&mut delay_wrapper)
+        .unwrap();
 
     // Clear the screen before turning on the backlight
-    display.clear_screen(Rgb565::BLACK.into_storage()).unwrap();
+    display.clear(Rgb565::BLACK).unwrap();
     delay_wrapper.delay_ms(1); // Delay a little bit to avoid a screen flash
     lcd_bl.into_push_pull_output_in_state(hal::gpio::PinState::High);
 
@@ -212,39 +205,28 @@ fn main() -> ! {
         let (x, y) = last_touch;
         let _ = write!(data, "({x:03},{y:03})").unwrap();
 
+        let center = display.bounding_box().center();
         // Draw centered text
-        let text_bounding_region = draw_text_with_background(
-            &mut framebuffer,
+        draw_text_with_background(
+            &mut display,
             data.as_str(),
-            display.bounding_box().center(),
+            center,
             text_style,
             color,
             Rgb565::BLACK,
-        );
-
-        if let Ok(_) = display.store_region(text_bounding_region) {
-            // hrm
-        }
-
-        //Display the next set of regions.
-        if let Ok(_) = display.show_regions(framebuffer.get_buffer()) {
-            // oops, what?
-        }
-        //reset the display frame buffer from the background for the regions just displayed.
-        framebuffer.copy_regions(background_framebuffer.get_buffer(), display.get_regions());
-        //clear out the regions from the display so its ready to start again.
-        display.clear_regions();
+        )
+        .unwrap();
     }
 }
 
-fn draw_text_with_background(
-    framebuffer: &mut FrameBuffer,
+fn draw_text_with_background<T: DrawTarget<Color = Rgb565>>(
+    framebuffer: &mut T,
     text: &str,
     position: Point,
     text_style: TextStyle,
     text_color: Rgb565,
     background_color: Rgb565,
-) -> Region {
+) -> Result<(), T::Error> {
     let character_style = MonoTextStyleBuilder::new()
         .font(&FONT_10X20)
         .text_color(text_color)
@@ -258,18 +240,10 @@ fn draw_text_with_background(
     // Draw the background
     Rectangle::new(position, text_area.size)
         .into_styled(PrimitiveStyle::with_fill(background_color))
-        .draw(framebuffer)
-        .unwrap();
+        .draw(framebuffer)?;
 
     // Draw the text
-    text.draw(framebuffer).unwrap();
+    text.draw(framebuffer)?;
 
-    // Return the bounding box
-    // Added 22 width on the Region to accom0date larger numbers
-    Region {
-        x: text_area.top_left.x as u16,
-        y: text_area.top_left.y as u16,
-        width: text_area.size.width + 22,
-        height: text_area.size.height * 2,
-    }
+    Ok(())
 }

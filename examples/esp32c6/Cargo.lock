@@ -375,6 +375,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-hal-bus"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d3980bf28e8577db59fe2bdb3df868a419469d2cecb363644eea2b6f7797669"
+dependencies = [
+ "critical-section",
+ "embedded-hal 1.0.0",
+ "portable-atomic",
+]
+
+[[package]]
 name = "embedded-hal-nb"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -634,11 +645,12 @@ dependencies = [
  "defmt-rtt",
  "device-driver",
  "embedded-graphics",
+ "embedded-hal-bus",
  "esp-backtrace",
  "esp-hal",
  "fugit",
- "gc9a01a_driver",
  "heapless",
+ "mipidsi",
 ]
 
 [[package]]
@@ -744,16 +756,6 @@ dependencies = [
  "futures-task",
  "pin-project-lite",
  "pin-utils",
-]
-
-[[package]]
-name = "gc9a01a_driver"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f3d0c6b40d1c0bb518bd4b3b168b880b21217f47df1d1a0510348072d04aa0"
-dependencies = [
- "embedded-graphics",
- "embedded-hal 1.0.0",
 ]
 
 [[package]]
@@ -871,6 +873,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cff7b8df5e85e30b87c2b0b3f58ba3a87b68e133738bf512a7713769326dbca9"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "mipidsi"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ba34dcbf61182ffa6992b5a4d9b566d5a99df127fd93f6d314213347329e92f"
+dependencies = [
+ "embedded-graphics-core",
+ "embedded-hal 1.0.0",
+ "heapless",
+ "nb 1.1.0",
 ]
 
 [[package]]
