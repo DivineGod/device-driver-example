@@ -13,7 +13,7 @@ cst816s-device-driver = { path = "../../driver" }
 device-driver = { git = "https://github.com/DivineGod/device-driver", branch = "fix/radium", default-features = false }
 embedded-graphics = "0.8.1"
 embedded-hal = "1.0.0"
-embedded-hal-bus = "0.2.0"
+embedded-hal-bus = "0.3.0"
 esp-backtrace = { version = "0.15.0", features = [
     "esp32s3",
     "exception-handler",

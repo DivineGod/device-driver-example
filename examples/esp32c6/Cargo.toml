@@ -14,7 +14,7 @@ defmt = "0.3.10"
 defmt-rtt = "0.4.1"
 device-driver = { git = "https://github.com/DivineGod/device-driver", branch = "fix/radium", default-features = false }
 embedded-graphics = "0.8.1"
-embedded-hal-bus = "0.2.0"
+embedded-hal-bus = "0.3.0"
 esp-backtrace = { version = "0.15.0", features = [
     "defmt",
     "esp32c6",
