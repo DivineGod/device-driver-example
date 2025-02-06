@@ -122,7 +122,7 @@ fn main() -> ! {
     display.clear(Rgb565::BLACK).unwrap();
 
     delay.delay_millis(1);
-    delay.delay_millis(10000);
+    lcd_bl.set_high();
 
     // Setup Touch Driver
     //
@@ -168,7 +168,7 @@ fn main() -> ! {
             color = match touch_event.gesture {
                 device::Gesture::NoGesture => {
                     info!("no gesture");
-                    Rgb565::WHITE
+                    Rgb565::MAGENTA
                 }
                 device::Gesture::SlideUp => Rgb565::RED,
                 device::Gesture::SlideDown => Rgb565::BLUE,
