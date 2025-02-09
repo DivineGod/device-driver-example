@@ -16,6 +16,6 @@ panic-halt = "1.0.0"
 rp2040-boot2 = "0.3.0"
 rp2040-hal = "0.11.0"
 waveshare-rp2040-touch-lcd-1-28 = { git = "https://github.com/DivineGod/rp-hal-boards", branch = "feat/waveshare-touch-lcd-1.28" }
-device-driver = { version = "1.0.0", default-features = false }
+device-driver = { version = "1.0.3", default-features = false }
 cst816s-device-driver = { path = "../../driver" }
 mipidsi = "0.9.0"

@@ -56,6 +56,24 @@ where
 
     /// Set initial default config
     pub fn init_config(&mut self) -> Result<(), DeviceError<I2C::Error>> {
+        self.device.irq_ctl().write(|irq_ctl| {
+            irq_ctl.set_en_test(false);
+            irq_ctl.set_en_touch(true);
+            irq_ctl.set_once_wlp(true);
+            irq_ctl.set_en_change(true);
+            irq_ctl.set_en_motion(true);
+        })?;
+        self.device.motion_mask().write(|mask| {
+            mask.set_en_d_click(true);
+            mask.set_en_con_lr(true);
+            mask.set_en_con_ud(true);
+        })?;
+        // self.device.motion_sl_angle().write(|m| m.set_value(0))?;
+        // self.device.lp_scan_th().write(|m| m.set_value(48))?;
+        // self.device.lp_scan_win().write(|m| m.set_value(3))?;
+        // self.device.lp_scan_freq().write(|m| m.set_value(7))?;
+        // self.device.lp_scan_idac().write(|m| m.set_value(1))?;
+        // self.device.auto_reset().write(|m| m.set_value(5))?;
         self.device.dis_auto_sleep().write(|m| m.set_value(0xfe))?;
         self.device
             .irq_pulse_width()
@@ -90,6 +108,9 @@ where
     ///
     /// Will return a [`TouchEvent`] struct if the device has a valid touch ready.
     pub fn event(&mut self) -> Option<TouchEvent> {
+        if self.interrupt_pin.is_high().unwrap() {
+            return None;
+        }
         let x = self.device.xpos().read();
         let y = self.device.ypos().read();
         let b0 = self.device.bpc_0().read();

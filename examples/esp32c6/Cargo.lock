@@ -49,8 +49,9 @@ checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
 
 [[package]]
 name = "bitvec"
-version = "1.1.0"
-source = "git+https://github.com/alexanderkjall/bitvec?branch=upgrade-radium-to-1#d75be941d6e12975f2b06c42535b06b4db91df3b"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
  "funty",
  "radium",
@@ -199,10 +200,10 @@ dependencies = [
 
 [[package]]
 name = "device-driver"
-version = "1.0.2"
-source = "git+https://github.com/DivineGod/device-driver?branch=fix%2Fradium#c0193a2f106e34a984a9ee21cc7f56f791c17bbb"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e6603dec2b2f66089ba94b1193547c0789cc2c94f926e67883805eaad7a5506"
 dependencies = [
- "bitvec",
  "defmt",
  "device-driver-macros",
  "embedded-io",
@@ -211,8 +212,9 @@ dependencies = [
 
 [[package]]
 name = "device-driver-generation"
-version = "1.0.2"
-source = "git+https://github.com/DivineGod/device-driver?branch=fix%2Fradium#c0193a2f106e34a984a9ee21cc7f56f791c17bbb"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a6d8e2e1b53318cd191a15934868a702ee74bd36ce8bc4892e3ccc43c2e1808"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -225,8 +227,9 @@ dependencies = [
 
 [[package]]
 name = "device-driver-macros"
-version = "1.0.2"
-source = "git+https://github.com/DivineGod/device-driver?branch=fix%2Fradium#c0193a2f106e34a984a9ee21cc7f56f791c17bbb"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d39d4c689da090a038c423e6301366224ef4ae5062506c289e20203965bc2e47"
 dependencies = [
  "device-driver-generation",
  "proc-macro2",
@@ -1000,12 +1003,9 @@ checksum = "bd7a31eed1591dcbc95d92ad7161908e72f4677f8fabf2a32ca49b4237cbf211"
 
 [[package]]
 name = "radium"
-version = "1.1.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db0b76288902db304c864a12046b73d2d895cc34a4bb8137baaeebe9978a072c"
-dependencies = [
- "cfg-if",
-]
+checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand_core"
