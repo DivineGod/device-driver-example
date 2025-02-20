@@ -6,15 +6,17 @@ edition = "2021"
 [dependencies]
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
+defmt = "0.3.10"
+defmt-rtt = "0.4.1"
 embedded-graphics = "0.8.1"
 embedded-hal = "1.0.0"
-embedded-hal-bus = "0.3.0"
+embedded-hal-bus = { version = "0.3.0", features = ["defmt-03"] }
 fugit = "0.3.7"
 heapless = "0.8.0"
 # nb = "1.1.0"
 panic-halt = "1.0.0"
 rp2040-boot2 = "0.3.0"
-rp2040-hal = "0.11.0"
+rp2040-hal = { version = "0.11.0", features = ["defmt"] }
 waveshare-rp2040-touch-lcd-1-28 = { git = "https://github.com/DivineGod/rp-hal-boards", branch = "feat/waveshare-touch-lcd-1.28" }
 device-driver = { version = "1.0.3", default-features = false }
 cst816s-device-driver = { path = "../../driver" }

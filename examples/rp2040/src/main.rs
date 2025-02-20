@@ -8,6 +8,8 @@
 
 use cortex_m::delay::Delay;
 use cst816s_device_driver::{device, CST816S};
+use defmt::info;
+use defmt_rtt as _;
 use embedded_graphics::mono_font::ascii::FONT_10X20;
 use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder};
@@ -100,6 +102,7 @@ fn main() -> ! {
     let mut delay = Delay::new(core.SYST, sys_freq);
 
     let (mut _pio, _sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    info!("Display Created");
 
     // Initialize LCD pins
     let lcd_dc = pins.lcd_dc.into_push_pull_output();
@@ -112,19 +115,22 @@ fn main() -> ! {
     let lcd_bl = pins
         .lcd_bl
         .into_push_pull_output_in_state(hal::gpio::PinState::Low);
+    info!("Display Created");
 
     // Initialize SPI from the LCD pins
     let spi = hal::Spi::<_, _, _, 8>::new(pac.SPI1, (lcd_mosi, lcd_clk));
     let spi = spi.init(
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
-        20.MHz(),
+        10.MHz(),
         embedded_hal::spi::MODE_0,
     );
     let spi_device = embedded_hal_bus::spi::ExclusiveDevice::new_no_delay(spi, lcd_cs).unwrap();
 
     let mut buffer = [0_u8; 512];
     let di = SpiInterface::new(spi_device, lcd_dc, &mut buffer);
+
+    info!("Display Created");
 
     let mut delay_wrapper = DelayWrapper::new(&mut delay);
 
@@ -137,6 +143,8 @@ fn main() -> ! {
         .init(&mut delay_wrapper)
         .unwrap();
 
+    info!("Display Created");
+
     // Clear the screen before turning on the backlight
     display.clear(Rgb565::BLACK).unwrap();
     delay_wrapper.delay_ms(1); // Delay a little bit to avoid a screen flash
@@ -147,7 +155,7 @@ fn main() -> ! {
     // Set up the pins needed for the driver
     let sda_pin = pins.i2c1_sda.reconfigure();
     let scl_pin = pins.i2c1_scl.reconfigure();
-    let touch_interrupt_pin = pins.tp_int.into_pull_up_input();
+    let touch_interrupt_pin = pins.gpio17.into_pull_up_input();
     // Setup reset pin for touch driver
     let touch_reset_pin = pins
         .tp_rst
