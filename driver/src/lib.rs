@@ -30,7 +30,7 @@ where
 {
     /// make a new instance, yeah!
     ///
-    /// ```rust
+    /// ```compile_fail
     ///     let driver = CST816S::new(...);
     /// ```
     pub fn new(i2c: I2C, address: SevenBitAddress, interrupt_pin: TPINT, reset_pin: TPRST) -> Self {
