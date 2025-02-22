@@ -1,7 +1,8 @@
 //! # Low-Level Device Driver implementation
 use core::ops::{Deref, DerefMut};
 
-use embedded_hal::i2c::{self, Operation, SevenBitAddress};
+use embedded_hal::i2c::{self as blocking_i2c, Operation, SevenBitAddress};
+use embedded_hal_async::i2c as async_i2c;
 
 device_driver::create_device! {
   device_name: Device,
@@ -396,7 +397,7 @@ impl<I2C> DeviceInterface<I2C> {
     }
 }
 
-impl<BUS: i2c::I2c> device_driver::RegisterInterface for DeviceInterface<BUS> {
+impl<BUS: blocking_i2c::I2c> device_driver::RegisterInterface for DeviceInterface<BUS> {
     type Error = DeviceError<BUS::Error>;
 
     type AddressType = u8;
@@ -421,6 +422,42 @@ impl<BUS: i2c::I2c> device_driver::RegisterInterface for DeviceInterface<BUS> {
         data: &mut [u8],
     ) -> Result<(), Self::Error> {
         self.i2c.write_read(self.device_address, &[address], data)?;
+        Ok(())
+    }
+}
+
+impl<BUS: async_i2c::I2c> device_driver::AsyncRegisterInterface for DeviceInterface<BUS> {
+    type Error = DeviceError<BUS::Error>;
+
+    type AddressType = u8;
+
+    async fn write_register(
+        &mut self,
+        address: Self::AddressType,
+        _size_bits: u32,
+        data: &[u8],
+    ) -> Result<(), Self::Error> {
+        self.i2c
+            .transaction(
+                self.device_address,
+                &mut [
+                    async_i2c::Operation::Write(&[address]),
+                    async_i2c::Operation::Write(data),
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn read_register(
+        &mut self,
+        address: Self::AddressType,
+        _size_bits: u32,
+        data: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        self.i2c
+            .write_read(self.device_address, &[address], data)
+            .await?;
         Ok(())
     }
 }
