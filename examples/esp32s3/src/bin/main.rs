@@ -2,9 +2,9 @@
 #![no_main]
 
 use core::fmt::Write;
-use cst816s_device_driver::{device, CST816S};
+use cst816s_device_driver::{CST816S, device};
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoTextStyle, MonoTextStyleBuilder},
+    mono_font::{MonoTextStyle, MonoTextStyleBuilder, ascii::FONT_10X20},
     pixelcolor::Rgb565,
     prelude::*,
     primitives::{Circle, PrimitiveStyle, Rectangle, Triangle},
@@ -15,14 +15,14 @@ use esp_backtrace as _;
 use esp_hal::{
     clock::CpuClock,
     delay::Delay,
-    gpio::{Input, Level, Output, Pull},
+    gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull},
     i2c::{self},
     main,
     rtc_cntl::Rtc,
     spi::{self, Mode},
+    time::Rate,
     timer::timg::TimerGroup,
 };
-use fugit::RateExtU32;
 use heapless::String;
 use log::info;
 
@@ -53,6 +53,9 @@ impl<'a> embedded_hal::delay::DelayNs for DelayWrapper<'a> {
         self.delay.delay_us(us); // Use microsecond delay
     }
 }
+
+esp_bootloader_esp_idf::esp_app_desc!();
+
 #[main]
 fn main() -> ! {
     // generator version: 0.2.2
@@ -76,10 +79,10 @@ fn main() -> ! {
     let miso = peripherals.GPIO12;
     let mosi = peripherals.GPIO11;
     let sclk = peripherals.GPIO10;
-    let lcd_cs = Output::new(peripherals.GPIO9, Level::High);
-    let lcd_dc = Output::new(peripherals.GPIO8, Level::Low);
-    let lcd_rst = Output::new(peripherals.GPIO14, Level::High);
-    let mut lcd_bl = Output::new(peripherals.GPIO2, Level::Low);
+    let lcd_cs = Output::new(peripherals.GPIO9, Level::High, OutputConfig::default());
+    let lcd_dc = Output::new(peripherals.GPIO8, Level::Low, OutputConfig::default());
+    let lcd_rst = Output::new(peripherals.GPIO14, Level::High, OutputConfig::default());
+    let mut lcd_bl = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
 
     let i2c_sda = peripherals.GPIO6;
     let i2c_scl = peripherals.GPIO7;
@@ -91,7 +94,7 @@ fn main() -> ! {
     let driver = spi::master::Spi::new(
         peripherals.SPI2,
         esp_hal::spi::master::Config::default()
-            .with_frequency(40.MHz())
+            .with_frequency(Rate::from_mhz(40))
             .with_mode(Mode::_0),
     )
     .unwrap()
@@ -127,16 +130,16 @@ fn main() -> ! {
     // Setup Touch Driver
     //
     // Set up the pins needed for the driver
-    let touch_interrupt_pin = Input::new(touch_int, Pull::Up);
+    let touch_interrupt_pin = Input::new(touch_int, InputConfig::default().with_pull(Pull::Up));
     // Setup reset pin for touch driver
-    let touch_reset_pin = Output::new(touch_reset, Level::High);
+    let touch_reset_pin = Output::new(touch_reset, Level::High, OutputConfig::default());
 
     // Create the I²C driver, using the two pre-configured pins.
     // This will fail  at compile time if the pins are in the wrong mode, or if
     // this I²C peripheral isn't available on these pins!
     let i2c = i2c::master::I2c::new(
         peripherals.I2C0,
-        esp_hal::i2c::master::Config::default().with_frequency(400.kHz()),
+        esp_hal::i2c::master::Config::default().with_frequency(Rate::from_khz(400)),
     )
     .unwrap()
     .with_sda(i2c_sda)

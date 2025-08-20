@@ -1,7 +1,7 @@
 [package]
 name = "rp2040-example"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 cortex-m = "0.7.7"
@@ -18,6 +18,6 @@ panic-halt = "1.0.0"
 rp2040-boot2 = "0.3.0"
 rp2040-hal = { version = "0.11.0", features = ["defmt"] }
 waveshare-rp2040-touch-lcd-1-28 = { git = "https://github.com/DivineGod/rp-hal-boards", branch = "feat/waveshare-touch-lcd-1.28" }
-device-driver = { version = "1.0.3", default-features = false }
+device-driver = { version = "1.0.7", default-features = false }
 cst816s-device-driver = { path = "../../driver" }
 mipidsi = "0.9.0"
