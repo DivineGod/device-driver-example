@@ -124,7 +124,7 @@ fn main() -> ! {
     // Set up the pins needed for the driver
     let sda_pin = pins.gpio6.reconfigure();
     let scl_pin = pins.gpio7.reconfigure();
-    let touch_interrupt_pin = pins.gpio17.into_pull_up_input();
+    let touch_interrupt_pin = pins.gpio21.into_pull_up_input();
     // Setup reset pin for touch driver
     let touch_reset_pin = pins
         .gpio22
