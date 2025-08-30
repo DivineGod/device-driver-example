@@ -7,7 +7,7 @@
 #![no_main]
 
 use cortex_m::delay::Delay;
-use cst816s_device_driver::{device, CST816S};
+use cst816s_device_driver::{CST816S, device};
 use defmt::info;
 use defmt_rtt as _;
 use embedded_graphics::mono_font::ascii::FONT_10X20;
@@ -15,8 +15,8 @@ use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder};
 use embedded_hal::delay::DelayNs;
 use fugit::RateExtU32;
-use mipidsi::interface::SpiInterface;
 use mipidsi::Builder;
+use mipidsi::interface::SpiInterface;
 use panic_halt as _;
 
 use core::fmt::Write;
@@ -24,15 +24,14 @@ use heapless::String;
 
 use waveshare_rp2040_touch_lcd_1_28::entry;
 use waveshare_rp2040_touch_lcd_1_28::{
+    Pins, XOSC_CRYSTAL_FREQ,
     hal::{
-        self,
-        clocks::{init_clocks_and_plls, Clock},
+        self, Sio,
+        clocks::{Clock, init_clocks_and_plls},
         pac,
         pio::PIOExt,
         watchdog::Watchdog,
-        Sio,
     },
-    Pins, XOSC_CRYSTAL_FREQ,
 };
 
 use embedded_graphics::{
@@ -155,7 +154,7 @@ fn main() -> ! {
     // Set up the pins needed for the driver
     let sda_pin = pins.i2c1_sda.reconfigure();
     let scl_pin = pins.i2c1_scl.reconfigure();
-    let touch_interrupt_pin = pins.gpio17.into_pull_up_input();
+    let touch_interrupt_pin = pins.tp_int.into_pull_up_input();
     // Setup reset pin for touch driver
     let touch_reset_pin = pins
         .tp_rst
